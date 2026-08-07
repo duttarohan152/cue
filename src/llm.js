@@ -1,4 +1,4 @@
-// LLM factory — OpenAI / Anthropic / Gemini behind one streaming interface.
+// LLM factory — OpenAI / Anthropic / Gemini / Amazon Bedrock behind one streaming interface.
 // stream({ system, turns:[{role,text}], imageDataUrl, maxTokens, onToken }) -> Promise<fullText>
 
 function normalizeProviderName(provider) {
@@ -53,10 +53,9 @@ async function streamOpenAI({ apiKey, model, system, turns, imageDataUrl, maxTok
   return full;
 }
 
-async function streamAnthropic({ apiKey, model, system, turns, imageDataUrl, maxTokens, onToken }) {
-  const Anthropic = require('@anthropic-ai/sdk');
-  const client = new Anthropic({ apiKey });
-  const messages = turns.map((t, i) => {
+// Anthropic message format is shared between the direct API and Amazon Bedrock.
+function buildAnthropicMessages(turns, imageDataUrl) {
+  return turns.map((t, i) => {
     const last = i === turns.length - 1;
     if (last && imageDataUrl && t.role === 'user') {
       const img = stripDataUrl(imageDataUrl);
@@ -67,12 +66,28 @@ async function streamAnthropic({ apiKey, model, system, turns, imageDataUrl, max
     }
     return { role: t.role, content: t.text };
   });
+}
+
+async function streamAnthropicClient(client, { model, system, turns, imageDataUrl, maxTokens, onToken }) {
+  const messages = buildAnthropicMessages(turns, imageDataUrl);
   const stream = await client.messages.create({ model, max_tokens: maxTokens, system, messages, stream: true });
   let full = '';
   for await (const ev of stream) {
     if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') { full += ev.delta.text; onToken(ev.delta.text); }
   }
   return full;
+}
+
+async function streamAnthropic({ apiKey, model, system, turns, imageDataUrl, maxTokens, onToken }) {
+  const Anthropic = require('@anthropic-ai/sdk');
+  const client = new Anthropic({ apiKey });
+  return streamAnthropicClient(client, { model, system, turns, imageDataUrl, maxTokens, onToken });
+}
+
+async function streamBedrock({ awsAccessKey, awsSecretKey, awsRegion, awsSessionToken, model, system, turns, imageDataUrl, maxTokens, onToken }) {
+  const { AnthropicBedrock } = require('@anthropic-ai/bedrock-sdk');
+  const client = new AnthropicBedrock({ awsAccessKey, awsSecretKey, awsRegion, awsSessionToken: awsSessionToken || undefined });
+  return streamAnthropicClient(client, { model, system, turns, imageDataUrl, maxTokens, onToken });
 }
 
 async function streamGemini({ apiKey, model, system, turns, imageDataUrl, maxTokens, onToken }) {
@@ -101,24 +116,40 @@ async function streamGemini({ apiKey, model, system, turns, imageDataUrl, maxTok
 function createLLM(settings) {
   const provider = settings.provider;
   const keys = settings.apiKeys || {};
+  const bedrockCreds = settings.bedrock || {};
+  const isBedrock = provider === 'bedrock';
   const apiKey = keys[provider];
   const tier = settings.smart ? 'smart' : 'fast';
   let model = (settings.models[provider] || {})[tier];
   if (provider === 'gemini' && /^gemini-1\.5\-/.test(model || '')) {
     model = 'gemini-2.0-flash';
   }
-  if (!model) model = provider === 'gemini' ? 'gemini-2.0-flash' : (provider === 'openai' ? 'gpt-4o-mini' : 'claude-3-5-haiku-latest');
+  if (!model) {
+    if (provider === 'gemini') model = 'gemini-2.0-flash';
+    else if (provider === 'openai') model = 'gpt-4o-mini';
+    else if (isBedrock) model = 'us.anthropic.claude-3-5-haiku-20241022-v1:0';
+    else model = 'claude-3-5-haiku-latest';
+  }
   const maxTokens = settings.smart ? 1400 : 700;
+
+  const bedrockReady = !!bedrockCreds.accessKeyId && !!bedrockCreds.secretAccessKey && !!bedrockCreds.region;
 
   return {
     provider, model, apiKey,
-    ready: !!apiKey && !!model,
+    ready: isBedrock ? (bedrockReady && !!model) : (!!apiKey && !!model),
     async stream(params) {
       const args = { apiKey, model, maxTokens, ...params, turns: sanitizeTurns(params.turns) };
       try {
         if (provider === 'openai') return await streamOpenAI(args);
         if (provider === 'anthropic') return await streamAnthropic(args);
         if (provider === 'gemini') return await streamGemini(args);
+        if (provider === 'bedrock') return await streamBedrock({
+          ...args,
+          awsAccessKey: bedrockCreds.accessKeyId,
+          awsSecretKey: bedrockCreds.secretAccessKey,
+          awsRegion: bedrockCreds.region,
+          awsSessionToken: bedrockCreds.sessionToken
+        });
         throw new Error('unknown provider: ' + provider);
       } catch (error) {
         throw new Error(formatProviderErrorMessage(error, provider));

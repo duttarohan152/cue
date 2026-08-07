@@ -589,6 +589,11 @@
     $('#key-anthropic').value = settings.apiKeys.anthropic || '';
     $('#key-gemini').value = settings.apiKeys.gemini || '';
     $('#key-deepgram').value = settings.apiKeys.deepgram || '';
+    const bedrock = settings.bedrock || {};
+    $('#bedrock-access-key').value = bedrock.accessKeyId || '';
+    $('#bedrock-secret-key').value = bedrock.secretAccessKey || '';
+    $('#bedrock-region').value = bedrock.region || '';
+    $('#bedrock-session-token').value = bedrock.sessionToken || '';
     const m = settings.models[settings.provider] || { fast: '', smart: '' };
     $('#model-fast').value = m.fast; $('#model-smart').value = m.smart;
     fillAppLinkCallers();
@@ -670,6 +675,11 @@
     settings.apiKeys.anthropic = $('#key-anthropic').value.trim();
     settings.apiKeys.gemini = $('#key-gemini').value.trim();
     settings.apiKeys.deepgram = $('#key-deepgram').value.trim();
+    if (!settings.bedrock) settings.bedrock = {};
+    settings.bedrock.accessKeyId = $('#bedrock-access-key').value.trim();
+    settings.bedrock.secretAccessKey = $('#bedrock-secret-key').value.trim();
+    settings.bedrock.region = $('#bedrock-region').value.trim();
+    settings.bedrock.sessionToken = $('#bedrock-session-token').value.trim();
     if (!settings.models[settings.provider]) settings.models[settings.provider] = {};
     settings.models[settings.provider].fast = $('#model-fast').value.trim();
     settings.models[settings.provider].smart = $('#model-smart').value.trim();

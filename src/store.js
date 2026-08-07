@@ -9,6 +9,8 @@ const DEFAULTS = {
   provider: 'openai',
   smart: false,
   apiKeys: { openai: '', anthropic: '', gemini: '', deepgram: '' },
+  // Amazon Bedrock uses AWS credentials (key + secret + region), not a single API token.
+  bedrock: { accessKeyId: '', secretAccessKey: '', region: 'us-east-1', sessionToken: '' },
   // Tab 2: Profile
   resumeText: '',
   jobDescription: '',
@@ -26,7 +28,8 @@ const DEFAULTS = {
   models: {
     openai: { fast: 'gpt-4o-mini', smart: 'gpt-4o' },
     anthropic: { fast: 'claude-3-5-haiku-latest', smart: 'claude-3-5-sonnet-latest' },
-    gemini: { fast: 'gemini-2.0-flash', smart: 'gemini-2.0-flash' }
+    gemini: { fast: 'gemini-2.0-flash', smart: 'gemini-2.0-flash' },
+    bedrock: { fast: 'global.anthropic.claude-sonnet-5', smart: 'global.anthropic.claude-opus-5' }
   }
 };
 
