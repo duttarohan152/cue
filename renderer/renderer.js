@@ -194,6 +194,15 @@
     await cue.settingsSet({ smart: settings.smart });
   });
 
+  // Language for coding answers (Auto = infer from the problem/conversation)
+  const langSelect = $('#lang-select');
+  if (langSelect) {
+    langSelect.addEventListener('change', async () => {
+      settings.codeLanguage = langSelect.value;
+      await cue.settingsSet({ codeLanguage: langSelect.value });
+    });
+  }
+
   // Hide / collapse
   $('#hide-btn').addEventListener('click', () => {
     const collapsed = $('#panel').classList.toggle('collapsed');
@@ -850,6 +859,9 @@
   (async function boot() {
     settings = await cue.settingsGet();
     const platformInfo = await cue.platformInfo();
+    // Coding-answer language selector reflects the saved preference.
+    const langSelectEl = document.getElementById('lang-select');
+    if (langSelectEl) langSelectEl.value = settings.codeLanguage || 'cpp';
 
     // R4: shortcut hints now live in the hover tooltip (title), appended to each
     // button's description so the key only shows on hover.

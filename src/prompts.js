@@ -15,6 +15,19 @@ function buildSystem(base, contextBlock) {
 const BASE_RULES =
   'Always respond in clear, natural English. Never switch to Hindi or any other language unless the user explicitly asks for it. ';
 
+const CODE_LANGUAGES = { c: 'C', cpp: 'C++', python: 'Python', bash: 'Bash' };
+
+// Language instruction for code-capable modes (assist / ask / leetcode). main.js
+// appends the result to the system prompt. A concrete choice pins the language;
+// 'auto' (or an unknown value) tells the model to infer it from context.
+function codeLanguageDirective(codeLanguage) {
+  const name = CODE_LANGUAGES[codeLanguage];
+  if (name) {
+    return `CODE LANGUAGE: When your answer includes code, write it in ${name} unless the user explicitly asks for another language. Use idiomatic, correct ${name}.`;
+  }
+  return 'CODE LANGUAGE: When your answer includes code, infer the most appropriate language from the coding problem shown on screen and the recent conversation (prefer the language visible on screen). If none is indicated, default to C++.';
+}
+
 const MODES = {
 
   // ── Assist: one-shot "do the smart thing" ─────────────────────────────────
@@ -23,6 +36,7 @@ const MODES = {
     userBubble: null,
     small: false,
     resumeMode: 'assist',
+    code: true,
     buildSystem(contextBlock) {
       return buildSystem(
         'You are cue, a discreet real-time copilot overlaid on the user\'s screen during an interview or coding session. ' +
@@ -123,6 +137,7 @@ const MODES = {
     userBubble: null,
     small: false,
     resumeMode: 'ask',
+    code: true,
     buildSystem(contextBlock) {
       return buildSystem(
         'You are cue, a real-time copilot with access to the candidate\'s screen and live interview. ' +
@@ -145,14 +160,16 @@ const MODES = {
     userBubble: 'Solve what\'s on screen',
     small: false,
     resumeMode: 'leetcode',
+    code: true,
     buildSystem(_contextBlock) {
-      // Context block intentionally ignored — personal info is irrelevant here
+      // Context block intentionally ignored — personal info is irrelevant here.
+      // Solution language is governed by the CODE LANGUAGE directive appended in main.js.
       return 'You are an expert competitive programmer. The screenshot contains a coding problem. ' +
-        'Respond with: (1) a one-line restatement, (2) a short approach, (3) a clean, correct, idiomatic solution in a fenced code block ' +
-        '(use the language shown on screen, else Python), (4) time and space complexity. Keep prose tight.';
+        'Respond with: (1) a one-line restatement, (2) a short approach, (3) a clean, correct, idiomatic solution in a fenced code block, ' +
+        '(4) time and space complexity. Keep prose tight.';
     },
     build() { return 'Solve the coding problem shown in the screenshot.'; }
   }
 };
 
-module.exports = { MODES, formatTranscript };
+module.exports = { MODES, formatTranscript, codeLanguageDirective };

@@ -5,7 +5,7 @@ const store = require('./src/store');
 const { captureScreenshot } = require('./src/screen');
 const { createSTT } = require('./src/stt');
 const { createLLM } = require('./src/llm');
-const { MODES } = require('./src/prompts');
+const { MODES, codeLanguageDirective } = require('./src/prompts');
 const { rms16 } = require('./src/wav');
 const { createStreamingSTT } = require('./src/stt-streaming');
 const { AdaptiveVAD, AudioRingBuffer } = require('./src/vad');
@@ -366,7 +366,11 @@ async function runFeature(mode, userText) {
 
     const settingsForPrompt = store.getSettings();
     const contextBlock = buildInterviewContext(settingsForPrompt, mode, transcript);
-    const system = def.buildSystem ? def.buildSystem(contextBlock) : (def.system || '');
+    let system = def.buildSystem ? def.buildSystem(contextBlock) : (def.system || '');
+    if (def.code) {
+      const dir = codeLanguageDirective(settingsForPrompt.codeLanguage);
+      if (dir) system += '\n\n' + dir;
+    }
     const built = def.build({ transcript, userText: userText || '' });
     await llm.stream({
       system,

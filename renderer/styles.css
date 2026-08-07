@@ -261,6 +261,15 @@ button:focus { outline: none; }
 .smart-pill:hover { background: rgba(255,255,255,0.09); }
 .smart-pill.on { border-color: rgba(60,131,245,0.5); color: #7FB0F9; background: rgba(60,131,245,0.10); }
 .smart-pill.on .ic { color: #7FB0F9; }
+.lang-select {
+  -webkit-app-region: no-drag;
+  padding: 5px 8px; border-radius: var(--r-pill);
+  border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.05);
+  color: var(--tx-2); font-size: 12px; font-weight: 500; font-family: var(--font);
+  cursor: pointer; outline: none; transition: all 140ms ease;
+}
+.lang-select:hover { background: rgba(255,255,255,0.09); }
+.lang-select:focus { border-color: var(--accent); }
 .more-btn {
   width: 28px; height: 28px; border-radius: var(--r-8);
   border: none; background: transparent; color: rgba(255,255,255,0.7);
