@@ -261,15 +261,43 @@ button:focus { outline: none; }
 .smart-pill:hover { background: rgba(255,255,255,0.09); }
 .smart-pill.on { border-color: rgba(60,131,245,0.5); color: #7FB0F9; background: rgba(60,131,245,0.10); }
 .smart-pill.on .ic { color: #7FB0F9; }
-.lang-select {
-  -webkit-app-region: no-drag;
-  padding: 5px 8px; border-radius: var(--r-pill);
+.lang-dd { position: relative; -webkit-app-region: no-drag; }
+.lang-dd-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 9px; border-radius: var(--r-pill);
   border: 1px solid rgba(255,255,255,0.18); background: rgba(255,255,255,0.05);
   color: var(--tx-2); font-size: 12px; font-weight: 500; font-family: var(--font);
-  cursor: pointer; outline: none; transition: all 140ms ease;
+  cursor: pointer; transition: all 140ms ease;
 }
-.lang-select:hover { background: rgba(255,255,255,0.09); }
-.lang-select:focus { border-color: var(--accent); }
+.lang-dd-btn:hover { background: rgba(255,255,255,0.09); }
+.lang-dd-caret { font-size: 9px; color: var(--tx-mut); }
+.lang-dd-menu {
+  position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 50;
+  min-width: 128px; padding: 4px;
+  background: rgba(28,33,45,0.98);
+  border: 1px solid rgba(255,255,255,0.14); border-radius: var(--r-8);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.5);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.lang-dd-opt {
+  text-align: left; padding: 6px 10px; border-radius: 6px;
+  border: none; background: transparent; color: var(--tx-2);
+  font-size: 13px; font-weight: 500; font-family: var(--font); cursor: pointer;
+}
+.lang-dd-opt:hover { background: rgba(255,255,255,0.08); }
+.lang-dd-opt.on { color: #7FB0F9; background: rgba(60,131,245,0.12); }
+.cue-tip {
+  position: fixed; z-index: 99999; left: 0; top: 0;
+  max-width: 260px; padding: 5px 9px;
+  background: rgba(28,33,45,0.98);
+  border: 1px solid rgba(255,255,255,0.14); border-radius: 8px;
+  color: var(--tx-1); font-size: 12px; font-weight: 500;
+  font-family: var(--font); line-height: 1.35;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+  pointer-events: none; white-space: normal;
+  opacity: 0; transition: opacity 120ms ease;
+}
+.cue-tip.show { opacity: 1; }
 .more-btn {
   width: 28px; height: 28px; border-radius: var(--r-8);
   border: none; background: transparent; color: rgba(255,255,255,0.7);

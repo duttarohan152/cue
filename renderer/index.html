@@ -10,21 +10,21 @@
   <div id="app">
     <!-- Dedicated drag handle / top bar -->
     <div id="toolbar" class="drag-handle">
-      <div class="drag-pill" title="Drag to move window">
+      <div class="drag-pill" data-tip="Drag to move window">
         <span class="drag-dots" aria-hidden="true"></span>
         <span class="drag-label">Drag</span>
       </div>
-      <button class="tb-logo" id="logo-btn" title="cue"></button>
+      <button class="tb-logo" id="logo-btn" data-tip="cue"></button>
       <div class="tb-divider"></div>
       <button class="tb-hide" id="hide-btn"><span class="chev"></span><span>Hide</span></button>
       <div class="tb-divider"></div>
-      <button class="tb-stop" id="stop-btn" title="Start / stop listening"></button>
+      <button class="tb-stop" id="stop-btn" data-tip="Start / stop listening"></button>
     </div>
 
     <!-- Main assistant panel -->
     <div id="panel-wrap">
       <span id="live-dot" class="off"></span>
-      <div id="stt-status" class="stt-status stt-disconnected" title="STT connection status">off</div>
+      <div id="stt-status" class="stt-status stt-disconnected" data-tip="STT connection status">off</div>
       <div id="panel" class="glass no-drag">
         <div id="messages"></div>
 
@@ -34,20 +34,20 @@
 
         <div id="action-row">
           <button class="act act-primary" data-mode="say"
-            title="Suggests what to say next based on the conversation">
+            data-tip="Suggests what to say next based on the conversation">
             <span class="ic"></span><span>What to say</span>
           </button>
           <span class="sep">•</span>
           <button class="act act-secondary" data-mode="assist"
-            title="Scans your screen and conversation to decide what you need">
+            data-tip="Scans your screen and conversation to decide what you need">
             <span class="ic"></span><span>Assist</span>
           </button>
           <span class="sep">•</span>
-          <button class="act" data-mode="leetcode" title="Solves the coding problem shown on screen"><span class="ic"></span><span>Solve</span></button>
+          <button class="act" data-mode="leetcode" data-tip="Solves the coding problem shown on screen"><span class="ic"></span><span>Solve</span></button>
           <span class="sep">•</span>
-          <button class="act" id="transcript-toggle-btn" title="Show/hide what was heard"><span class="ic"></span><span>Transcript</span></button>
+          <button class="act" id="transcript-toggle-btn" data-tip="Show/hide what was heard"><span class="ic"></span><span>Transcript</span></button>
           <span class="sep">•</span>
-          <button class="act act-clear" id="clear-transcript-btn" title="Clear transcript and start fresh"><span class="ic"></span><span>Clear</span></button>
+          <button class="act act-clear" id="clear-transcript-btn" data-tip="Clear transcript and start fresh"><span class="ic"></span><span>Clear</span></button>
         </div>
 
         <div id="composer">
@@ -57,16 +57,22 @@
           </div>
           <div id="composer-bottom">
             <button id="smart-toggle" class="smart-pill"><span class="ic"></span><span>Smart</span></button>
-            <select id="lang-select" class="lang-select" title="Language for coding answers (Auto infers from the problem)">
-              <option value="auto">Auto</option>
-              <option value="c">C</option>
-              <option value="cpp" selected>C++</option>
-              <option value="python">Python</option>
-              <option value="bash">Bash</option>
-            </select>
-            <button id="more-btn" class="more-btn" title="Settings"></button>
+            <div id="lang-dd" class="lang-dd" data-tip="Language for coding answers (Auto infers from the problem)">
+              <button id="lang-dd-btn" class="lang-dd-btn" type="button" aria-haspopup="listbox" aria-expanded="false">
+                <span id="lang-dd-label">C++</span>
+                <span class="lang-dd-caret" aria-hidden="true">▾</span>
+              </button>
+              <div id="lang-dd-menu" class="lang-dd-menu hidden" role="listbox">
+                <button type="button" class="lang-dd-opt" data-value="auto" role="option">Auto</button>
+                <button type="button" class="lang-dd-opt" data-value="c" role="option">C</button>
+                <button type="button" class="lang-dd-opt" data-value="cpp" role="option">C++</button>
+                <button type="button" class="lang-dd-opt" data-value="python" role="option">Python</button>
+                <button type="button" class="lang-dd-opt" data-value="bash" role="option">Bash</button>
+              </div>
+            </div>
+            <button id="more-btn" class="more-btn" data-tip="Settings"></button>
             <div class="spacer"></div>
-            <button id="send-btn" title="Send"></button>
+            <button id="send-btn" data-tip="Send"></button>
           </div>
         </div>
 

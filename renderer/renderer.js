@@ -22,6 +22,52 @@
   const clearIC = document.querySelector('#clear-transcript-btn .ic');
   if (clearIC) clearIC.innerHTML = icon('trash-2', { size: 15 });
 
+  // ---- in-window tooltips ------------------------------------------------
+  // Native `title` tooltips are drawn by the OS in a layer that content
+  // protection can't hide, so they leak into screen shares. These custom
+  // tooltips (driven by [data-tip]) live in the DOM and stay hidden with the
+  // rest of the window.
+  const tipEl = document.createElement('div');
+  tipEl.className = 'cue-tip';
+  tipEl.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(tipEl);
+  let tipTarget = null, tipTimer = null;
+  function positionTip(target) {
+    const r = target.getBoundingClientRect();
+    const tw = tipEl.offsetWidth, th = tipEl.offsetHeight;
+    let left = r.left + r.width / 2 - tw / 2;
+    let top = r.bottom + 8;
+    if (top + th > window.innerHeight - 4) top = r.top - th - 8;
+    left = Math.max(4, Math.min(left, window.innerWidth - tw - 4));
+    if (top < 4) top = 4;
+    tipEl.style.left = left + 'px';
+    tipEl.style.top = top + 'px';
+  }
+  function showTip(target) {
+    const text = target.getAttribute('data-tip');
+    if (!text) { hideTip(); return; }
+    tipEl.textContent = text;
+    tipEl.classList.add('show');
+    positionTip(target);
+  }
+  function hideTip() { tipEl.classList.remove('show'); }
+  document.addEventListener('mouseover', (e) => {
+    const t = e.target.closest ? e.target.closest('[data-tip]') : null;
+    if (t === tipTarget) return;
+    clearTimeout(tipTimer);
+    if (!t) { tipTarget = null; hideTip(); return; }
+    tipTarget = t;
+    tipTimer = setTimeout(() => { if (tipTarget === t) showTip(t); }, 350);
+  });
+  document.addEventListener('mouseout', (e) => {
+    const t = e.target.closest ? e.target.closest('[data-tip]') : null;
+    if (!t || t !== tipTarget) return;
+    if (e.relatedTarget && t.contains(e.relatedTarget)) return;
+    clearTimeout(tipTimer); hideTip(); tipTarget = null;
+  });
+  document.addEventListener('mousedown', () => { clearTimeout(tipTimer); hideTip(); tipTarget = null; }, true);
+  window.addEventListener('scroll', hideTip, true);
+
   // ---- state -------------------------------------------------------------
   let settings = null;
   let busy = false;
@@ -194,13 +240,47 @@
     await cue.settingsSet({ smart: settings.smart });
   });
 
-  // Language for coding answers (Auto = infer from the problem/conversation)
-  const langSelect = $('#lang-select');
-  if (langSelect) {
-    langSelect.addEventListener('change', async () => {
-      settings.codeLanguage = langSelect.value;
-      await cue.settingsSet({ codeLanguage: langSelect.value });
+  // Language for coding answers (Auto = infer from the problem/conversation).
+  // Custom in-DOM dropdown (not a native <select>): a native popup renders in a
+  // separate OS window that setContentProtection can't hide, so it would leak
+  // into screen shares. This markup lives inside the protected window.
+  const LANG_LABELS = { auto: 'Auto', c: 'C', cpp: 'C++', python: 'Python', bash: 'Bash' };
+  const langDd = $('#lang-dd');
+  const langDdBtn = $('#lang-dd-btn');
+  const langDdMenu = $('#lang-dd-menu');
+  const langDdLabel = $('#lang-dd-label');
+
+  function setLangUI(value) {
+    const val = LANG_LABELS[value] ? value : 'cpp';
+    if (langDdLabel) langDdLabel.textContent = LANG_LABELS[val];
+    document.querySelectorAll('#lang-dd-menu .lang-dd-opt').forEach((o) => {
+      o.classList.toggle('on', o.dataset.value === val);
     });
+  }
+  function closeLangMenu() {
+    if (langDdMenu) langDdMenu.classList.add('hidden');
+    if (langDdBtn) langDdBtn.setAttribute('aria-expanded', 'false');
+  }
+  if (langDdBtn && langDdMenu) {
+    langDdBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const nowHidden = langDdMenu.classList.toggle('hidden');
+      langDdBtn.setAttribute('aria-expanded', nowHidden ? 'false' : 'true');
+    });
+    langDdMenu.querySelectorAll('.lang-dd-opt').forEach((opt) => {
+      opt.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const value = opt.dataset.value;
+        settings.codeLanguage = value;
+        setLangUI(value);
+        closeLangMenu();
+        await cue.settingsSet({ codeLanguage: value });
+      });
+    });
+    document.addEventListener('click', (e) => {
+      if (langDd && !langDd.contains(e.target)) closeLangMenu();
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLangMenu(); });
   }
 
   // Hide / collapse
@@ -405,7 +485,7 @@
       speaking:     'Speech detected',
       transcribing: 'Transcribing…'
     };
-    dot.title = labels[dotState] || '';
+    dot.setAttribute('data-tip', labels[dotState] || '');
   }
 
   let sttState = 'disconnected';
@@ -556,9 +636,9 @@
       const loaded = fields[el.dataset.field];
       el.classList.toggle('loaded', loaded);
       el.classList.toggle('missing', !loaded);
-      el.title = loaded
+      el.setAttribute('data-tip', loaded
         ? el.textContent.trim() + ' loaded'
-        : el.textContent.trim() + ' not set — add in Settings';
+        : el.textContent.trim() + ' not set — add in Settings');
     });
   }
 
@@ -568,7 +648,7 @@
     const fast = m.fast || 'fast model';
     const smart = m.smart || 'smart model';
     const btn = document.getElementById('smart-toggle');
-    if (btn) btn.title = 'Fast: ' + fast + ' · Smart: ' + smart + ' (higher quality, ~2× slower)';
+    if (btn) btn.setAttribute('data-tip', 'Fast: ' + fast + ' · Smart: ' + smart + ' (higher quality, ~2× slower)');
   }
 
   // ---- settings ----------------------------------------------------------
@@ -656,7 +736,7 @@
       row.className = 's-caller';
       const label = document.createElement('span');
       label.textContent = name + ' — ' + (allowed.length ? allowed.join(' + ') : 'denied');
-      label.title = id;
+      label.setAttribute('data-tip', id);
       const button = document.createElement('button');
       button.type = 'button';
       button.textContent = 'Forget';
@@ -860,14 +940,13 @@
     settings = await cue.settingsGet();
     const platformInfo = await cue.platformInfo();
     // Coding-answer language selector reflects the saved preference.
-    const langSelectEl = document.getElementById('lang-select');
-    if (langSelectEl) langSelectEl.value = settings.codeLanguage || 'cpp';
+    setLangUI(settings.codeLanguage || 'cpp');
 
     // R4: shortcut hints now live in the hover tooltip (title), appended to each
     // button's description so the key only shows on hover.
     const appendShortcut = (sel, combo) => {
       const el = document.querySelector(sel);
-      if (el && combo) el.title = el.title + ' (' + combo + ')';
+      if (el && combo) el.setAttribute('data-tip', (el.getAttribute('data-tip') || '') + ' (' + combo + ')');
     };
     appendShortcut('.act[data-mode="say"]', isWindows ? 'Ctrl+Shift+↵' : '⌘⇧↵');
     appendShortcut('.act[data-mode="assist"]', isWindows ? 'Ctrl+↵' : '⌘↵');
