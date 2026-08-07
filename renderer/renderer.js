@@ -12,8 +12,8 @@
   $('#stop-btn').innerHTML = icon('stop-square', { size: 15 });
   document.querySelector('.act[data-mode="assist"] .ic').innerHTML = icon('sparkles', { size: 16 });
   document.querySelector('.act[data-mode="say"] .ic').innerHTML = icon('wand-sparkles', { size: 16 });
-  document.querySelector('.act[data-mode="followup"] .ic').innerHTML = icon('message-circle', { size: 16 });
-  document.querySelector('.act[data-mode="recap"] .ic').innerHTML = icon('refresh-cw', { size: 16 });
+  const leetcodeIC = document.querySelector('.act[data-mode="leetcode"] .ic');
+  if (leetcodeIC) leetcodeIC.innerHTML = icon('code', { size: 16 });
   $('#smart-toggle .ic').innerHTML = icon('zap', { size: 14 });
   $('#more-btn').innerHTML = icon('more-horizontal', { size: 18 });
   $('#send-btn').innerHTML = icon('play', { size: 15 });
@@ -156,7 +156,7 @@
     cue.ask({ mode, text: text || '' });
   }
 
-  document.querySelectorAll('.act').forEach((btn) => {
+  document.querySelectorAll('.act[data-mode]').forEach((btn) => {
     btn.addEventListener('click', () => runMode(btn.dataset.mode, ''));
   });
 
@@ -233,20 +233,22 @@
     });
   }
 
-  // Clear transcript
+  // Clear transcript — shared by the button and the Clear shortcut (⌘⇧K / Ctrl+Shift+K).
+  async function clearAll() {
+    await cue.clearTranscript();
+    clearMessages();
+    // Also clear the floating interim bar
+    if (interimEl) { interimEl.textContent = ''; interimEl.classList.remove('show'); }
+    const list = document.getElementById('transcript-list');
+    if (list) list.innerHTML = '';
+    transcriptInterimEl = null;
+    showToast('Transcript cleared', 3000);
+  }
   const clearTranscriptBtn = document.getElementById('clear-transcript-btn');
   if (clearTranscriptBtn) {
-    clearTranscriptBtn.addEventListener('click', async () => {
-      await cue.clearTranscript();
-      clearMessages();
-      // Also clear the floating interim bar
-      if (interimEl) { interimEl.textContent = ''; interimEl.classList.remove('show'); }
-      const list = document.getElementById('transcript-list');
-      if (list) list.innerHTML = '';
-      transcriptInterimEl = null;
-      showToast('Transcript cleared', 3000);
-    });
+    clearTranscriptBtn.addEventListener('click', clearAll);
   }
+  cue.on('shortcut:clear', () => { clearAll(); });
 
   // ---- capture: mic (renderer side) — uses AudioWorklet (modern, off-main-thread) ----
   let audioCtx = null, micStream = null, micWorklet = null;
@@ -849,11 +851,16 @@
     settings = await cue.settingsGet();
     const platformInfo = await cue.platformInfo();
 
-    // R4: shortcut hints
-    const sayHintEl = document.getElementById('say-shortcut-hint');
-    const assistHintEl = document.getElementById('assist-shortcut-hint');
-    if (sayHintEl) sayHintEl.textContent = isWindows ? 'Ctrl+Shift+↵' : '⌘⇧↵';
-    if (assistHintEl) assistHintEl.textContent = isWindows ? 'Ctrl+↵' : '⌘↵';
+    // R4: shortcut hints now live in the hover tooltip (title), appended to each
+    // button's description so the key only shows on hover.
+    const appendShortcut = (sel, combo) => {
+      const el = document.querySelector(sel);
+      if (el && combo) el.title = el.title + ' (' + combo + ')';
+    };
+    appendShortcut('.act[data-mode="say"]', isWindows ? 'Ctrl+Shift+↵' : '⌘⇧↵');
+    appendShortcut('.act[data-mode="assist"]', isWindows ? 'Ctrl+↵' : '⌘↵');
+    appendShortcut('.act[data-mode="leetcode"]', isWindows ? 'Ctrl+H' : '⌘H');
+    appendShortcut('#clear-transcript-btn', isWindows ? 'Ctrl+Shift+K' : '⌘⇧K');
 
     // R5: prep status
     updatePrepStatus();
