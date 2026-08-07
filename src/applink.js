@@ -13,7 +13,8 @@
 // packages/app-link. Do not edit it here.
 
 const { app, dialog, ipcMain } = require('electron');
-const { AppLinkServer } = require('../vendor/app-link');
+const path = require('path');
+const { AppLinkServer } = require(path.join(__dirname, '..', 'vendor', 'app-link'));
 const { describeState, consentCopy } = require('./applink-state');
 
 let link = null;

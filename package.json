@@ -22,7 +22,8 @@
       "main.js",
       "preload.js",
       "src/**/*",
-      "renderer/**/*"
+      "renderer/**/*",
+      "vendor/**/*"
     ],
     "mac": {
       "target": [
