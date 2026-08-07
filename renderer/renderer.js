@@ -582,9 +582,20 @@
     });
   });
 
+  // Bedrock uses AWS credentials instead of a single API key, so swap which
+  // credential group is visible based on the selected provider.
+  function updateProviderFields() {
+    const isBedrock = settings.provider === 'bedrock';
+    const apiGroup = document.getElementById('api-keys-group');
+    const bedrockGroup = document.getElementById('bedrock-group');
+    if (apiGroup) apiGroup.classList.toggle('hidden', isBedrock);
+    if (bedrockGroup) bedrockGroup.classList.toggle('hidden', !isBedrock);
+  }
+
   function fillSettings() {
     // Keys tab
     document.querySelectorAll('#provider-seg button').forEach((b) => b.classList.toggle('on', b.dataset.provider === settings.provider));
+    updateProviderFields();
     $('#key-openai').value = settings.apiKeys.openai || '';
     $('#key-anthropic').value = settings.apiKeys.anthropic || '';
     $('#key-gemini').value = settings.apiKeys.gemini || '';
@@ -663,6 +674,7 @@
   document.querySelectorAll('#provider-seg button').forEach((b) => b.addEventListener('click', () => {
     settings.provider = b.dataset.provider;
     document.querySelectorAll('#provider-seg button').forEach((x) => x.classList.toggle('on', x === b));
+    updateProviderFields();
     const m = settings.models[settings.provider] || { fast: '', smart: '' };
     $('#model-fast').value = m.fast; $('#model-smart').value = m.smart;
     $('#s-status').textContent = statusText();
