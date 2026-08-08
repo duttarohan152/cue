@@ -372,10 +372,17 @@ async function runFeature(mode, userText) {
       if (dir) system += '\n\n' + dir;
     }
     const built = def.build({ transcript, userText: userText || '' });
+    // Coding answers (full solution + explanation + complexity) can be long, so
+    // give code-capable modes a much larger output budget to avoid truncating
+    // mid-answer. Conversational modes stay lean. Overrides the llm.js default.
+    const maxTokens = def.code
+      ? (settings.smart ? 8000 : 4096)
+      : (settings.smart ? 1400 : 700);
     await llm.stream({
       system,
       turns: [{ role: 'user', text: built }],
       imageDataUrl,
+      maxTokens,
       onToken: (t) => send('llm:token', { text: t })
     });
     send('llm:done', {});
