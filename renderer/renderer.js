@@ -9,6 +9,7 @@
   // ---- paint icons -------------------------------------------------------
   $('#logo-btn').innerHTML = icon('logo', { size: 18 });
   $('.tb-hide .chev').innerHTML = icon('chevron-down', { size: 14 });
+  $('#close-btn').innerHTML = icon('x', { size: 15 });
   $('#stop-btn').innerHTML = icon('stop-square', { size: 15 });
   document.querySelector('.act[data-mode="assist"] .ic').innerHTML = icon('sparkles', { size: 16 });
   document.querySelector('.act[data-mode="say"] .ic').innerHTML = icon('wand-sparkles', { size: 16 });
@@ -289,6 +290,11 @@
     $('#hide-btn').classList.toggle('collapsed', collapsed);
     $('#live-dot').style.display = collapsed ? 'none' : '';
   });
+
+  // Close / quit — a clickable fallback in case the ⌘⇧X / Ctrl+Shift+X shortcut
+  // is held by another app and never reaches cue.
+  const closeBtn = $('#close-btn');
+  if (closeBtn) closeBtn.addEventListener('click', () => cue.quit());
 
   // Stop = start/stop listening. Kick off system-audio capture straight from the click so
   // the user-gesture is fresh for getDisplayMedia (loopback capture needs it).
@@ -952,6 +958,7 @@
     appendShortcut('.act[data-mode="assist"]', isWindows ? 'Ctrl+↵' : '⌘↵');
     appendShortcut('.act[data-mode="leetcode"]', isWindows ? 'Ctrl+H' : '⌘H');
     appendShortcut('#clear-transcript-btn', isWindows ? 'Ctrl+Shift+K' : '⌘⇧K');
+    appendShortcut('#close-btn', isWindows ? 'Ctrl+Shift+X' : '⌘⇧X');
 
     // R5: prep status
     updatePrepStatus();

@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('cue', {
   appLinkRevoke: (callerId) => ipcRenderer.invoke('applink:revoke', callerId),
   appLinkConsentRespond: (id, allowed) => ipcRenderer.send('applink:consent-response', { id, allowed }),
   log: (msg) => ipcRenderer.send('log', msg),
+  quit: () => ipcRenderer.send('app:quit'),
   on: (channel, cb) => {
     const allowed = ['capture:state', 'llm:start', 'llm:token', 'llm:done', 'llm:error', 'status', 'transcript', 'stt:interim', 'stt:final', 'stt:status', 'vad:state', 'applink:consent-request', 'shortcut:clear'];
     if (!allowed.includes(channel)) return;

@@ -100,6 +100,9 @@ html, body {
 .tb-stop { width: 28px; height: 28px; border-radius: var(--r-8); color: #fff; }
 .tb-stop:hover { background: rgba(255,255,255,0.08); }
 .tb-stop.active { color: #ff6b6b; }
+.tb-close { width: 28px; height: 28px; border-radius: var(--r-8); color: #fff; }
+/* #id selector so it outranks `#toolbar button { color:#fff }` and recolors the X. */
+#close-btn:hover { background: rgba(255,255,255,0.08); color: #ff6b6b; }
 
 /* ============================ Panel ============================ */
 #panel-wrap { position: relative; margin-top: 12px; width: min(624px, 94vw); }
