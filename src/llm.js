@@ -113,6 +113,11 @@ async function streamGemini({ apiKey, model, system, turns, imageDataUrl, maxTok
   return full;
 }
 
+// Maximum output tokens each provider's configured models accept. Requesting
+// more is a hard API error, so stream() clamps to these. Claude Opus/Sonnet on
+// Bedrock allow far more; the direct OpenAI/Anthropic/Gemini models cap lower.
+const PROVIDER_MAX_OUTPUT = { openai: 16384, anthropic: 8192, gemini: 8192, bedrock: 32000 };
+
 function createLLM(settings) {
   const provider = settings.provider;
   const keys = settings.apiKeys || {};
@@ -130,7 +135,7 @@ function createLLM(settings) {
     else if (isBedrock) model = 'us.anthropic.claude-3-5-haiku-20241022-v1:0';
     else model = 'claude-3-5-haiku-latest';
   }
-  const maxTokens = settings.smart ? 1400 : 700;
+  const maxTokens = settings.smart ? 2800 : 1400;
 
   const bedrockReady = !!bedrockCreds.accessKeyId && !!bedrockCreds.secretAccessKey && !!bedrockCreds.region;
 
@@ -139,6 +144,9 @@ function createLLM(settings) {
     ready: isBedrock ? (bedrockReady && !!model) : (!!apiKey && !!model),
     async stream(params) {
       const args = { apiKey, model, maxTokens, ...params, turns: sanitizeTurns(params.turns) };
+      // Requesting more output tokens than a model allows is a hard API error,
+      // so clamp the requested budget to each provider's real ceiling.
+      args.maxTokens = Math.min(args.maxTokens, PROVIDER_MAX_OUTPUT[provider] || 8192);
       try {
         if (provider === 'openai') return await streamOpenAI(args);
         if (provider === 'anthropic') return await streamAnthropic(args);

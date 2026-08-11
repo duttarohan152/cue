@@ -28,6 +28,11 @@ function codeLanguageDirective(codeLanguage) {
   return 'CODE LANGUAGE: When your answer includes code, infer the most appropriate language from the coding problem shown on screen and the recent conversation (prefer the language visible on screen). If none is indicated, default to C++.';
 }
 
+// Appended (in main.js) to code-capable modes. Conditional wording so it stays a
+// no-op for non-code answers (e.g. a behavioural reply from Assist).
+const CODING_GUIDANCE =
+  'CODING ANSWERS: When your response includes a code solution, keep the code simple and readable — the kind a strong engineer writes by hand in an interview. Prefer the most straightforward approach that works; avoid clever one-liners, over-engineering, unnecessary abstractions, or advanced tricks that look machine-generated. Use clear variable names and only brief, useful comments. After the code block, add a short 2–3 sentence summary explaining how the solution works. Then, on separate lines at the very end, state "Time complexity: …" and "Space complexity: …".';
+
 const MODES = {
 
   // ── Assist: one-shot "do the smart thing" ─────────────────────────────────
@@ -47,7 +52,7 @@ const MODES = {
         '• MOTIVATION ("why this company/role"): Give a genuine, specific answer using their stated reasons.\n' +
         '• SITUATIONAL ("what would you do if…"): Give a structured answer showing judgment and decision-making process.\n' +
         '• EXPERIENCE ("tell me about your role at X"): Draw from the resume to give a specific, proud answer.\n' +
-        '• TECHNICAL/CONCEPTUAL: Explain clearly with examples. For LeetCode: short approach + solution + complexity.\n' +
+        '• TECHNICAL/CONCEPTUAL: Explain clearly with examples. For coding problems, give a short approach, then the solution.\n' +
         '• COMPENSATION ("salary expectations"): Use their stated target, give a confident range.\n' +
         '• "Any questions for us?": Offer 2–3 of their prepared questions.\n\n' +
         'Write in first person as if the candidate is speaking. No preamble, no "Here\'s what you could say". Just the answer.',
@@ -163,13 +168,13 @@ const MODES = {
     code: true,
     buildSystem(_contextBlock) {
       // Context block intentionally ignored — personal info is irrelevant here.
-      // Solution language is governed by the CODE LANGUAGE directive appended in main.js.
-      return 'You are an expert competitive programmer. The screenshot contains a coding problem. ' +
-        'Respond with: (1) a one-line restatement, (2) a short approach, (3) a clean, correct, idiomatic solution in a fenced code block, ' +
-        '(4) time and space complexity. Keep prose tight.';
+      // Language, code style, summary and complexity come from the CODE LANGUAGE
+      // and CODING ANSWERS guidance appended in main.js.
+      return 'You are an expert programmer helping a candidate during a live coding interview. The screenshot contains a coding problem. ' +
+        'Respond with: (1) a one-line restatement, (2) a short, plain-English approach, then (3) the solution. Keep prose tight.';
     },
     build() { return 'Solve the coding problem shown in the screenshot.'; }
   }
 };
 
-module.exports = { MODES, formatTranscript, codeLanguageDirective };
+module.exports = { MODES, formatTranscript, codeLanguageDirective, CODING_GUIDANCE };

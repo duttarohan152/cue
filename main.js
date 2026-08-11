@@ -5,7 +5,7 @@ const store = require('./src/store');
 const { captureScreenshot } = require('./src/screen');
 const { createSTT } = require('./src/stt');
 const { createLLM } = require('./src/llm');
-const { MODES, codeLanguageDirective } = require('./src/prompts');
+const { MODES, codeLanguageDirective, CODING_GUIDANCE } = require('./src/prompts');
 const { rms16 } = require('./src/wav');
 const { createStreamingSTT } = require('./src/stt-streaming');
 const { AdaptiveVAD, AudioRingBuffer } = require('./src/vad');
@@ -370,14 +370,16 @@ async function runFeature(mode, userText) {
     if (def.code) {
       const dir = codeLanguageDirective(settingsForPrompt.codeLanguage);
       if (dir) system += '\n\n' + dir;
+      system += '\n\n' + CODING_GUIDANCE;
     }
     const built = def.build({ transcript, userText: userText || '' });
-    // Coding answers (full solution + explanation + complexity) can be long, so
-    // give code-capable modes a much larger output budget to avoid truncating
-    // mid-answer. Conversational modes stay lean. Overrides the llm.js default.
+    // Coding answers (solution + summary + complexity) can be long, so give
+    // code-capable modes a large output budget to avoid truncating mid-answer.
+    // Conversational modes stay lean. llm.js clamps this per provider so it
+    // never exceeds a model's real output limit.
     const maxTokens = def.code
-      ? (settings.smart ? 8000 : 4096)
-      : (settings.smart ? 1400 : 700);
+      ? (settings.smart ? 16000 : 8192)
+      : (settings.smart ? 2800 : 1400);
     await llm.stream({
       system,
       turns: [{ role: 'user', text: built }],
