@@ -60,6 +60,7 @@ module.exports = {
     },
   },
   win: {
+    icon: "build-resources/icon.ico",
     target: [{ target: "nsis", arch: ["x64"] }],
   },
 };

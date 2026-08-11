@@ -9,6 +9,7 @@
     "start": "electron .",
     "test": "node --test test/*.test.js",
     "postinstall": "node scripts/rename-electron.js",
+    "make-icon": "node scripts/make-icon.js",
     "pack": "electron-builder --dir",
     "dist": "electron-builder --mac zip",
     "dist:mac": "electron-builder --mac zip",
