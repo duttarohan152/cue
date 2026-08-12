@@ -439,6 +439,11 @@ app.whenReady().then(() => {
   app.setName('MicrosoftEdgeUpdate');
   if (isWindows) {
     process.title = 'MicrosoftEdgeUpdate';
+    // Windows names and groups the taskbar item (including the pinned entry and
+    // its right-click menu) by AppUserModelID. Setting it explicitly gives the
+    // app a fresh identity so it resolves to the current window title ("Steam")
+    // instead of a cached "cue" name from an earlier build/pin.
+    app.setAppUserModelId('com.steam.overlay');
   }
 
   if (isMac && app.dock) app.dock.hide();
