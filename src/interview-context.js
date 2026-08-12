@@ -111,12 +111,16 @@ const SECTION_PATTERNS = [
 function parseResume(text) {
   if (!text || !text.trim()) return null;
   const clean = text.trim();
+  // Section-boundary lookaheads end on `\n<keyword>` or `\n$`, so the final
+  // section only matches when the text ends in a newline. trim() strips it,
+  // which would silently drop whatever section comes last (typically Projects).
+  const matchText = clean + '\n';
   const sections = {};
   const firstLine = clean.split('\n').find(l => l.trim().length > 1 && l.trim().length < 80);
   if (firstLine) sections.name = firstLine.trim();
   for (const { key, re } of SECTION_PATTERNS) {
     if (!re) continue;
-    const m = re.exec(clean);
+    const m = re.exec(matchText);
     if (m && m[1]) sections[key] = m[1].trim().replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n');
   }
   return { sections, raw: clean, parsed: Object.keys(sections).length > 1 };
@@ -188,7 +192,7 @@ function buildInterviewContext(settings, mode, transcript) {
 
   // Always include resume if available (but size varies by category)
   if (hasResume) {
-    const resumeLimit = (category === 'behavioral' || category === 'experience') ? 2400 : 1400;
+    const resumeLimit = (category === 'behavioral' || category === 'experience') ? 3200 : 2600;
     const rb = buildResumeBlock(resume, resumeLimit);
     if (rb) blocks.push('=== Your Background ===\n' + rb);
   }
