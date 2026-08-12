@@ -28,7 +28,7 @@ const canNotarize =
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId: "com.cue.overlay",
-  productName: "cue",
+  productName: "Steam",
   asar: false,
   publish: null,
   // An allowlist, so anything new has to be added here or it simply is not in

@@ -17,7 +17,7 @@
   },
   "build": {
     "appId": "com.cue.overlay",
-    "productName": "cue",
+    "productName": "Steam",
     "asar": false,
     "files": [
       "main.js",

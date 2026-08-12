@@ -150,11 +150,11 @@ function createWindow() {
     }, 500);
   });
 
-  win.setTitle('Microsoft Edge Update'); // set before load
+  win.setTitle('Steam'); // set before load
 
   win.webContents.on('did-finish-load', () => {
     win.showInactive();
-    win.setTitle('Microsoft Edge Update');
+    win.setTitle('Steam');
     // Warn about missing content protection on old Windows builds
     if (isWindows && shouldProtect && !WIN_SUPPORTS_CONTENT_PROTECTION) {
       send('status', {
