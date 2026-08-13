@@ -284,12 +284,15 @@
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLangMenu(); });
   }
 
-  // Hide / collapse
-  $('#hide-btn').addEventListener('click', () => {
+  // Hide / collapse — shared by the button and the global shortcut (⌘\ / Ctrl+\),
+  // so it works even when the overlay isn't focused.
+  function toggleHide() {
     const collapsed = $('#panel').classList.toggle('collapsed');
     $('#hide-btn').classList.toggle('collapsed', collapsed);
     $('#live-dot').style.display = collapsed ? 'none' : '';
-  });
+  }
+  $('#hide-btn').addEventListener('click', toggleHide);
+  cue.on('shortcut:hide', () => { toggleHide(); });
 
   // Close / quit — a clickable fallback in case the ⌘⇧X / Ctrl+Shift+X shortcut
   // is held by another app and never reaches cue.
@@ -959,6 +962,7 @@
     appendShortcut('.act[data-mode="leetcode"]', isWindows ? 'Ctrl+H' : '⌘H');
     appendShortcut('#clear-transcript-btn', isWindows ? 'Ctrl+Shift+K' : '⌘⇧K');
     appendShortcut('#close-btn', isWindows ? 'Ctrl+Shift+X' : '⌘⇧X');
+    appendShortcut('#hide-btn', isWindows ? 'Ctrl+\\' : '⌘\\');
 
     // R5: prep status
     updatePrepStatus();
