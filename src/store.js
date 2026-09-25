@@ -8,7 +8,7 @@ const FILE = path.join(app.getPath('userData'), 'cue-data.json');
 const DEFAULTS = {
   provider: 'openai',
   smart: false,
-  // Preferred language for coding answers ('auto' | 'c' | 'cpp' | 'python' | 'bash').
+  // Preferred language for coding answers ('auto' | 'c' | 'cpp').
   codeLanguage: 'cpp',
   apiKeys: { openai: '', anthropic: '', gemini: '', deepgram: '' },
   // Amazon Bedrock uses AWS credentials (key + secret + region), not a single API token.

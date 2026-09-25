@@ -1,6 +1,19 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { MODES, CODING_GUIDANCE } = require('../src/prompts');
+const { MODES, CODING_GUIDANCE, EXPLANATION_GUIDANCE, codeLanguageDirective } = require('../src/prompts');
+
+test('code language directive pins C and C++', () => {
+  assert.match(codeLanguageDirective('c'), /write it in C\b/);
+  assert.match(codeLanguageDirective('cpp'), /write it in C\+\+/);
+});
+
+test('code language directive infers for auto and for retired choices', () => {
+  // Python/Bash were dropped from the selector; a value saved by an older build
+  // must fall through to inference rather than pin a language nothing offers.
+  for (const value of ['auto', 'python', 'bash', '', undefined]) {
+    assert.match(codeLanguageDirective(value), /infer the most appropriate language/i);
+  }
+});
 
 test('assist mode gives a direct answer in first person', () => {
   const system = MODES.assist.buildSystem(null);
@@ -55,6 +68,32 @@ test('coding guidance stays inert for answers without code', () => {
   // assist and ask append this to every answer, so a behavioural reply must not
   // get pushed into the code structure or grow complexity lines.
   assert.match(CODING_GUIDANCE, /when your response includes a code solution/i);
+});
+
+test('explanation guidance asks for crisp points, not paragraphs', () => {
+  assert.match(EXPLANATION_GUIDANCE, /one point per line/i);
+  assert.match(EXPLANATION_GUIDANCE, /starting with "- "/);
+  assert.match(EXPLANATION_GUIDANCE, /never as paragraphs/i);
+  assert.match(EXPLANATION_GUIDANCE, /first person/i);
+  // Flat only: the renderer draws an indented bullet at the same level as a
+  // top-level one, so a sub-bullet would read as a sibling point.
+  assert.match(EXPLANATION_GUIDANCE, /no sub-bullets/i);
+});
+
+test('explanation guidance stays inert for code answers', () => {
+  // assist and ask carry both blocks at once, so each has to be scoped by the
+  // kind of answer or they would fight over the same response.
+  assert.match(EXPLANATION_GUIDANCE, /when your answer explains rather than solves/i);
+  assert.match(CODING_GUIDANCE, /when your response includes a code solution/i);
+});
+
+test('technical questions reach the explanation guidance', () => {
+  for (const mode of ['assist', 'ask']) {
+    const system = MODES[mode].buildSystem(null);
+    assert.ok(system.includes(EXPLANATION_GUIDANCE), `${mode} must carry EXPLANATION_GUIDANCE`);
+  }
+  // leetcode is always a code answer; bulleted-prose rules would only confuse it.
+  assert.ok(!MODES.leetcode.buildSystem(null).includes(EXPLANATION_GUIDANCE));
 });
 
 test('followup mode returns a bullet list', () => {

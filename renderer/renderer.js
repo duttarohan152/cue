@@ -266,19 +266,34 @@
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); runMode('assist', ''); }
   });
 
+  // Shortcuts for the two composer toggles. Global rather than in-window,
+  // because the overlay is non-focusable until a text field is in use.
+  const SMART_COMBO = isWindows ? 'Ctrl+Shift+M' : '⌘⇧M';
+  const LANG_COMBO = isWindows ? 'Ctrl+Shift+L' : '⌘⇧L';
+
   // Smart toggle
   const smartBtn = $('#smart-toggle');
-  smartBtn.addEventListener('click', async () => {
+  async function toggleSmart() {
     settings.smart = !settings.smart;
     smartBtn.classList.toggle('on', settings.smart);
+    updateSmartTooltip();
+    // Fired by a global shortcut the panel may be collapsed for, so say what
+    // changed rather than relying on the pill being visible.
+    showToast(settings.smart ? 'Smart model' : 'Fast model', 1600);
     await cue.settingsSet({ smart: settings.smart });
-  });
+  }
+  smartBtn.addEventListener('click', toggleSmart);
+  cue.on('shortcut:smart', toggleSmart);
 
   // Language for coding answers (Auto = infer from the problem/conversation).
   // Custom in-DOM dropdown (not a native <select>): a native popup renders in a
   // separate OS window that setContentProtection can't hide, so it would leak
   // into screen shares. This markup lives inside the protected window.
-  const LANG_LABELS = { auto: 'Auto', c: 'C', cpp: 'C++', python: 'Python', bash: 'Bash' };
+  // Only C and C++ are offered; anything else is what Auto is for.
+  const LANG_LABELS = { auto: 'Auto', c: 'C', cpp: 'C++' };
+  // Cycled in the order the menu lists them, so the shortcut and the dropdown
+  // agree about what "next" means.
+  const LANG_CYCLE = ['auto', 'c', 'cpp'];
   const langDd = $('#lang-dd');
   const langDdBtn = $('#lang-dd-btn');
   const langDdMenu = $('#lang-dd-menu');
@@ -316,6 +331,18 @@
     });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeLangMenu(); });
   }
+
+  // indexOf returns -1 for a value no longer offered, which lands on 'auto' —
+  // the right place for a stale Python/Bash choice to end up.
+  async function cycleLang() {
+    const next = LANG_CYCLE[(LANG_CYCLE.indexOf(settings.codeLanguage) + 1) % LANG_CYCLE.length];
+    settings.codeLanguage = next;
+    setLangUI(next);
+    closeLangMenu();
+    showToast('Language: ' + LANG_LABELS[next], 1600);
+    await cue.settingsSet({ codeLanguage: next });
+  }
+  cue.on('shortcut:lang', cycleLang);
 
   // Hide / collapse — shared by the button and the global shortcut (⌘\ / Ctrl+\),
   // so it works even when the overlay isn't focused.
@@ -690,7 +717,9 @@
     const fast = m.fast || 'fast model';
     const smart = m.smart || 'smart model';
     const btn = document.getElementById('smart-toggle');
-    if (btn) btn.setAttribute('data-tip', 'Fast: ' + fast + ' · Smart: ' + smart + ' (higher quality, ~2× slower)');
+    // The shortcut hint belongs here rather than in boot's appendShortcut pass,
+    // because this runs on every provider change and would overwrite it.
+    if (btn) btn.setAttribute('data-tip', 'Fast: ' + fast + ' · Smart: ' + smart + ' (higher quality, ~2× slower) (' + SMART_COMBO + ')');
   }
 
   // ---- settings ----------------------------------------------------------
@@ -1012,8 +1041,15 @@
   (async function boot() {
     settings = await cue.settingsGet();
     const platformInfo = await cue.platformInfo();
-    // Coding-answer language selector reflects the saved preference.
-    setLangUI(settings.codeLanguage || 'cpp');
+    // Coding-answer language selector reflects the saved preference. Python and
+    // Bash are no longer offered, so a choice saved by an older build is folded
+    // back to the default — otherwise the dropdown would read C++ while the
+    // prompt quietly inferred the language instead.
+    if (!LANG_LABELS[settings.codeLanguage]) {
+      settings.codeLanguage = 'cpp';
+      cue.settingsSet({ codeLanguage: 'cpp' });
+    }
+    setLangUI(settings.codeLanguage);
 
     // R4: shortcut hints now live in the hover tooltip (title), appended to each
     // button's description so the key only shows on hover.
@@ -1027,6 +1063,7 @@
     appendShortcut('#clear-transcript-btn', isWindows ? 'Ctrl+Shift+K' : '⌘⇧K');
     appendShortcut('#close-btn', isWindows ? 'Ctrl+Shift+X' : '⌘⇧X');
     appendShortcut('#hide-btn', isWindows ? 'Ctrl+\\' : '⌘\\');
+    appendShortcut('#lang-dd', LANG_COMBO); // #smart-toggle's hint lives in updateSmartTooltip
 
     // R5: prep status
     updatePrepStatus();

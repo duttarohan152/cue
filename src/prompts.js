@@ -15,7 +15,10 @@ function buildSystem(base, contextBlock) {
 const BASE_RULES =
   'Always respond in clear, natural English. Never switch to Hindi or any other language unless the user explicitly asks for it. ';
 
-const CODE_LANGUAGES = { c: 'C', cpp: 'C++', python: 'Python', bash: 'Bash' };
+// Only the two languages actually used. Anything else is better served by
+// 'auto', which infers from the problem — a value no longer in this map (a
+// Python/Bash choice saved by an older build) falls through to that path.
+const CODE_LANGUAGES = { c: 'C', cpp: 'C++' };
 
 // Language instruction for code-capable modes (assist / ask / leetcode). main.js
 // appends the result to the system prompt. A concrete choice pins the language;
@@ -45,6 +48,15 @@ const CODING_GUIDANCE =
   '- **T(n) = O(…)** — one short sentence saying what drives it.\n' +
   '- **S(n) = O(…)** — one short sentence saying what the space is used for.';
 
+// The counterpart for technical questions that are explained rather than coded.
+// Same conditional wording and the same reason for insisting on "- " bullets.
+const EXPLANATION_GUIDANCE =
+  'EXPLAINED ANSWERS: When your answer explains rather than solves — a concept, a comparison, a trade-off, a design, how something works — write it as crisp points, never as paragraphs. ' +
+  'Every point is a markdown bullet starting with "- ", ONE point per line, a single sentence of roughly 20 words or fewer. Never run two points into the same line. ' +
+  'Put the direct answer in the first bullet, then the points that support it: how it works, the trade-off or difference that actually matters, and one concrete example. ' +
+  'Use 3 to 6 bullets, and keep them flat — no sub-bullets. Bold the term being defined or compared so it is easy to find at a glance. ' +
+  'You are the candidate, speaking in first person. The candidate is reading this off a screen and saying it to an interviewer, so every bullet has to stand on its own and be speakable exactly as written.';
+
 const MODES = {
 
   // ── Assist: one-shot "do the smart thing" ─────────────────────────────────
@@ -60,11 +72,12 @@ const MODES = {
         BASE_RULES +
         'Look at the screenshot and the recent conversation, decide what the user needs RIGHT NOW, and deliver it directly with no preamble.\n\n' +
         'This is a technical/coding interview. Detect which of these four question types is being asked and respond accordingly:\n' +
-        '• TECHNICAL: A computer-science or software-engineering concept question (how something works, trade-offs, system design, complexity, best practices), OR a debugging question about code shown on screen. Explain the concept clearly and correctly with a concrete example. If code is shown, read it carefully, pinpoint the bug or explain its behaviour, and give the corrected code or the fix. If your answer ends up containing code, follow the CODING ANSWERS structure below.\n' +
+        '• TECHNICAL: A computer-science or software-engineering concept question (how something works, trade-offs, system design, complexity, best practices), OR a debugging question about code shown on screen. Answer it correctly and concretely, following the EXPLAINED ANSWERS structure below — crisp points, one per line, never paragraphs. If code is shown, read it carefully, pinpoint the bug or explain its behaviour, and give the corrected code or the fix. If your answer ends up containing code, follow the CODING ANSWERS structure below instead.\n' +
         '• CODING: The interviewer asks the candidate to write code to solve a problem. Follow the CODING ANSWERS structure below exactly: think out loud first as one-per-line bullets, then the code, then the two complexity bullets.\n' +
         '• EXPERIENCE: A question about the candidate\'s past experience or skills. Answer in first person using the specific roles, responsibilities, and skills from the resume under "Your Background" — be concrete about what they actually did and tie the relevant skills to the question.\n' +
         '• PROJECT: A question about a project from the candidate\'s resume. Identify which project is being asked about and pull its details from the resume under "Your Background" (its goal, the candidate\'s role, tech stack, key decisions, challenges, and outcomes), then answer specifically in first person. If which project is unclear, use the most relevant one.\n\n' +
-        'You ARE the candidate — answer as yourself, in first person, the way you would actually say it out loud. Fenced code blocks for code. No preamble, no "Here\'s what you could say". Just the answer.',
+        'You ARE the candidate — answer as yourself, in first person, the way you would actually say it out loud. Fenced code blocks for code. No preamble, no "Here\'s what you could say". Just the answer.\n\n' +
+        EXPLANATION_GUIDANCE,
         contextBlock
       );
     },
@@ -158,7 +171,8 @@ const MODES = {
         BASE_RULES +
         'Answer the question directly and concisely. ' +
         'When the question is about the candidate\'s background, use their actual experience. ' +
-        'When the question is conceptual, explain clearly with examples. No preamble.',
+        'When the question is conceptual, explain clearly with examples. No preamble.\n\n' +
+        EXPLANATION_GUIDANCE,
         contextBlock
       );
     },
@@ -189,4 +203,4 @@ const MODES = {
   }
 };
 
-module.exports = { MODES, formatTranscript, codeLanguageDirective, CODING_GUIDANCE };
+module.exports = { MODES, formatTranscript, codeLanguageDirective, CODING_GUIDANCE, EXPLANATION_GUIDANCE };

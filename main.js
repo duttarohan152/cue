@@ -17,7 +17,7 @@ let win = null;
 // false when another application already owns the combination, and nothing used
 // to look at that — so the only symptom was a key that did nothing. Iris reads
 // this and can say which key is taken instead of guessing from a screenshot.
-const shortcutState = { assist: false, say: false, leetcode: false, clear: false, hide: false, quit: false };
+const shortcutState = { assist: false, say: false, leetcode: false, clear: false, hide: false, quit: false, smart: false, lang: false };
 const isMac = process.platform === 'darwin';
 const isWindows = process.platform === 'win32';
 
@@ -455,6 +455,10 @@ function registerShortcuts() {
   shortcutState.leetcode = globalShortcut.register('CommandOrControl+H', () => runFeature('leetcode', ''));
   shortcutState.clear = globalShortcut.register('CommandOrControl+Shift+K', () => send('shortcut:clear', {}));
   shortcutState.hide = globalShortcut.register('CommandOrControl+\\', () => send('shortcut:hide', {}));
+  // Both flip a setting the renderer already owns, so they go the same way as
+  // clear/hide: the renderer does the work and is the only writer of settings.
+  shortcutState.smart = globalShortcut.register('CommandOrControl+Shift+M', () => send('shortcut:smart', {}));
+  shortcutState.lang = globalShortcut.register('CommandOrControl+Shift+L', () => send('shortcut:lang', {}));
   shortcutState.quit = globalShortcut.register('CommandOrControl+Shift+X', () => app.quit());
   for (const [name, wasRegistered] of Object.entries(shortcutState)) {
     if (!wasRegistered) {
