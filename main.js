@@ -387,13 +387,15 @@ async function runFeature(mode, userText) {
       system += '\n\n' + CODING_GUIDANCE;
     }
     const built = def.build({ transcript, userText: userText || '' });
-    // Coding answers (solution + summary + complexity) can be long, so give
-    // code-capable modes a large output budget to avoid truncating mid-answer.
-    // Conversational modes stay lean. llm.js clamps this per provider so it
-    // never exceeds a model's real output limit.
+    // max_tokens is a ceiling, not a target — the model still stops when the
+    // answer is done — so these are set well clear of what an answer needs.
+    // They have to be: Claude 5 counts thinking against this same budget, and
+    // the old conversational figure (2800) could be spent entirely on reasoning
+    // before a single visible word, which surfaces as a truncated reply rather
+    // than an error. llm.js clamps per provider, so smaller models are unaffected.
     const maxTokens = def.code
-      ? (settings.smart ? 16000 : 8192)
-      : (settings.smart ? 2800 : 1400);
+      ? (settings.smart ? 64000 : 32000)
+      : (settings.smart ? 32000 : 16000);
     await llm.stream({
       system,
       turns: [{ role: 'user', text: built }],

@@ -68,9 +68,20 @@ function buildAnthropicMessages(turns, imageDataUrl) {
   });
 }
 
-async function streamAnthropicClient(client, { model, system, turns, imageDataUrl, maxTokens, onToken }) {
+// The system prompt — guidance blocks plus the résumé/JD context — is identical
+// from one request to the next within a session, so marking it as a cache
+// breakpoint cuts time-to-first-token on every call after the first. Below the
+// model's minimum (1024 tokens on Sonnet 5, 512 on Opus 5) the request still
+// succeeds, it simply isn't cached, so there is nothing to guard against.
+function buildAnthropicSystem(system, cacheTtl) {
+  if (!system) return undefined;
+  const cache_control = cacheTtl ? { type: 'ephemeral', ttl: cacheTtl } : { type: 'ephemeral' };
+  return [{ type: 'text', text: system, cache_control }];
+}
+
+async function streamAnthropicClient(client, { model, system, turns, imageDataUrl, maxTokens, onToken, cacheTtl }) {
   const messages = buildAnthropicMessages(turns, imageDataUrl);
-  const stream = await client.messages.create({ model, max_tokens: maxTokens, system, messages, stream: true });
+  const stream = await client.messages.create({ model, max_tokens: maxTokens, system: buildAnthropicSystem(system, cacheTtl), messages, stream: true });
   let full = '';
   for await (const ev of stream) {
     if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') { full += ev.delta.text; onToken(ev.delta.text); }
@@ -87,7 +98,11 @@ async function streamAnthropic({ apiKey, model, system, turns, imageDataUrl, max
 async function streamBedrock({ awsAccessKey, awsSecretKey, awsRegion, awsSessionToken, model, system, turns, imageDataUrl, maxTokens, onToken }) {
   const { AnthropicBedrock } = require('@anthropic-ai/bedrock-sdk');
   const client = new AnthropicBedrock({ awsAccessKey, awsSecretKey, awsRegion, awsSessionToken: awsSessionToken || undefined });
-  return streamAnthropicClient(client, { model, system, turns, imageDataUrl, maxTokens, onToken });
+  // 1h TTL rather than the 5m default, because an interview runs far longer
+  // than five minutes and the gaps between questions are easily that long.
+  // Bedrock takes `ttl` natively; the direct Anthropic API needs a beta header
+  // for it, so streamAnthropic deliberately leaves it at the default.
+  return streamAnthropicClient(client, { model, system, turns, imageDataUrl, maxTokens, onToken, cacheTtl: '1h' });
 }
 
 async function streamGemini({ apiKey, model, system, turns, imageDataUrl, maxTokens, onToken }) {
@@ -114,9 +129,15 @@ async function streamGemini({ apiKey, model, system, turns, imageDataUrl, maxTok
 }
 
 // Maximum output tokens each provider's configured models accept. Requesting
-// more is a hard API error, so stream() clamps to these. Claude Opus/Sonnet on
-// Bedrock allow far more; the direct OpenAI/Anthropic/Gemini models cap lower.
-const PROVIDER_MAX_OUTPUT = { openai: 16384, anthropic: 8192, gemini: 8192, bedrock: 32000 };
+// more is a hard API error, so stream() clamps to these.
+//
+// Bedrock is 128000 because that is the real per-request ceiling for Sonnet 5
+// and Opus 5. It matters more than it looks: both run adaptive thinking on by
+// default at `high` effort, and max_tokens caps thinking AND answer text
+// together — so a tight budget gets spent reasoning and truncates the answer
+// mid-sentence rather than erroring. The others stay low because the default
+// OpenAI/Anthropic/Gemini models here genuinely cap there.
+const PROVIDER_MAX_OUTPUT = { openai: 16384, anthropic: 8192, gemini: 8192, bedrock: 128000 };
 
 function createLLM(settings) {
   const provider = settings.provider;

@@ -2,13 +2,46 @@
 // The first call can trigger the system permission prompt for the app.
 const { desktopCapturer, screen } = require('electron');
 
-// Cap the long edge and the payload size. Providers reject oversized images —
-// Anthropic/Bedrock (Claude) hard-limit the base64 image to 5 MB and downscale
-// anything past ~1568px on the long edge anyway — so a full-resolution hi-DPI
-// screenshot (a multi-MB PNG) would 400 out. We cap resolution, keep PNG while
-// it fits (crisp for on-screen code/text), and fall back to JPEG otherwise.
-const MAX_EDGE = 1568;
+// Cap the long edge and the payload size. Claude hard-limits the base64 image
+// to 5 MB, so a full-resolution hi-DPI screenshot (a multi-MB PNG) would 400
+// out. We cap resolution, keep PNG while it fits (crisp for on-screen code and
+// text), and fall back to JPEG otherwise.
+//
+// These are the HIGH-RESOLUTION tier limits, which Claude 4.7 and later — so
+// Sonnet 5 and Opus 5 — use. The old 1568px cap here was the standard tier for
+// earlier models and was throwing away more than half the detail the current
+// models accept, on screenshots of code that they have to read character by
+// character. Claude counts an image in 28x28 patches, so both limits bind:
+// the long edge AND ceil(w/28) * ceil(h/28) visual tokens.
+const MAX_EDGE = 2576;
+const MAX_VISUAL_TOKENS = 4784;
 const B64_TARGET = Math.floor(4.5 * 1024 * 1024); // safety margin under the 5 MB cap
+
+function visualTokens(w, h) {
+  return Math.ceil(w / 28) * Math.ceil(h / 28);
+}
+
+// Sending anything past these limits only costs time-to-first-token: Claude
+// downscales it server-side and gives nothing back for the extra pixels.
+//
+// Binary search on the scale rather than shrinking iteratively, because the
+// ceil() in the patch count makes small reductions no-ops — a naive loop stalls
+// and settles well under the budget, throwing away resolution for nothing.
+function fitToLimits(w, h) {
+  const at = (s) => ({ width: Math.max(1, Math.round(w * s)), height: Math.max(1, Math.round(h * s)) });
+  const fits = (s) => {
+    const { width, height } = at(s);
+    return Math.max(width, height) <= MAX_EDGE && visualTokens(width, height) <= MAX_VISUAL_TOKENS;
+  };
+  const edgeScale = Math.min(1, MAX_EDGE / Math.max(w, h));
+  if (fits(edgeScale)) return at(edgeScale);
+  let lo = 0, hi = edgeScale;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid)) lo = mid; else hi = mid;
+  }
+  return at(lo);
+}
 
 // On macOS the first getSources() call in a fresh process reliably hands back an
 // empty thumbnail — ScreenCaptureKit hasn't produced a frame yet — and sometimes
@@ -42,9 +75,7 @@ async function captureScreenshot() {
   const scale = primary.scaleFactor || 1;
   const nativeW = Math.floor(width * scale);
   const nativeH = Math.floor(height * scale);
-  const capScale = Math.min(1, MAX_EDGE / Math.max(nativeW, nativeH));
-  const thumbW = Math.max(1, Math.round(nativeW * capScale));
-  const thumbH = Math.max(1, Math.round(nativeH * capScale));
+  const { width: thumbW, height: thumbH } = fitToLimits(nativeW, nativeH);
 
   let img = null;
   for (let attempt = 0; attempt < ATTEMPTS && !img; attempt++) {

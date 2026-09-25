@@ -7,6 +7,14 @@ function formatTranscript(turns, limit) {
   return recent.map((t) => (t.channel === 'them' ? 'Them: ' : 'You: ') + t.text).join('\n');
 }
 
+// How many transcript turns each mode sends. A "turn" here is an STT utterance,
+// not a conversational exchange — Deepgram finalises every few seconds — so the
+// old limits (14 for assist) covered well under two minutes of an interview and
+// routinely cut off the problem statement the question referred back to. Sonnet
+// 5 and Opus 5 hold 1M tokens and a full 200-turn transcript is a few thousand,
+// so recency, not budget, is the only reason to trim at all.
+const TURNS = { assist: 60, say: 60, ask: 50, followup: 80 };
+
 function buildSystem(base, contextBlock) {
   if (!contextBlock) return base;
   return contextBlock + '\n\n' + base;
@@ -82,7 +90,7 @@ const MODES = {
       );
     },
     build(ctx) {
-      const t = formatTranscript(ctx.transcript, 14);
+      const t = formatTranscript(ctx.transcript, TURNS.assist);
       return 'Recent conversation:\n' + (t || '(none)') + '\n\nRespond with exactly what I should say right now.';
     }
   },
@@ -111,7 +119,7 @@ const MODES = {
       );
     },
     build(ctx) {
-      const t = formatTranscript(ctx.transcript, 16);
+      const t = formatTranscript(ctx.transcript, TURNS.say);
       return 'Interview conversation so far:\n' + (t || '(listening not started yet)') +
         '\n\nWhat should I say next?';
     }
@@ -133,7 +141,7 @@ const MODES = {
       );
     },
     build(ctx) {
-      const t = formatTranscript(ctx.transcript, 20);
+      const t = formatTranscript(ctx.transcript, TURNS.followup);
       return 'Conversation so far:\n' + (t || '(none)') + '\n\nSuggest follow-up questions for the interviewer.';
     }
   },
@@ -177,7 +185,7 @@ const MODES = {
       );
     },
     build(ctx) {
-      const t = formatTranscript(ctx.transcript, 12);
+      const t = formatTranscript(ctx.transcript, TURNS.ask);
       return (t ? 'Recent conversation:\n' + t + '\n\n' : '') + 'Question: ' + ctx.userText;
     }
   },
