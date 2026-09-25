@@ -122,13 +122,6 @@
 
   function clearMessages() { messages.innerHTML = ''; aiEl = null; caretEl = null; }
 
-  function addUserBubble(text) {
-    const b = document.createElement('div');
-    b.className = 'user-bubble';
-    b.textContent = text;
-    messages.appendChild(b);
-  }
-
   function startAi(small) {
     aiEl = document.createElement('div');
     aiEl.className = 'ai-text' + (small ? ' small' : '');
@@ -222,16 +215,33 @@
     const started = Date.now();
     thinkingEl = document.createElement('div');
     thinkingEl.className = 'ai-thinking';
-    thinkingEl.textContent = 'Thinking…';
+    const label = document.createElement('span');
+    label.textContent = 'Thinking…';
+    // Lives here because this is the thing you are already staring at while
+    // waiting, and it disappears by itself the moment the answer starts.
+    const stop = document.createElement('button');
+    stop.type = 'button';
+    stop.className = 'think-stop';
+    stop.textContent = 'Stop';
+    stop.addEventListener('click', cancelRun);
+    thinkingEl.append(label, stop);
     group.appendChild(thinkingEl);
     thinkingTimer = setInterval(() => {
-      if (!thinkingEl) return;
-      thinkingEl.textContent = 'Thinking… ' + Math.round((Date.now() - started) / 1000) + 's';
+      if (thinkingEl) label.textContent = 'Thinking… ' + Math.round((Date.now() - started) / 1000) + 's';
     }, 1000);
   }
   function stopThinking() {
     clearInterval(thinkingTimer); thinkingTimer = null;
     if (thinkingEl) { thinkingEl.remove(); thinkingEl = null; }
+  }
+  function cancelRun() {
+    cue.cancelRun();
+    stopThinking();
+    // Say so rather than leaving an empty block: a cancel during the thinking
+    // phase has no partial text to show.
+    if (aiEl && !(aiEl.dataset.raw || '').trim()) aiEl.dataset.raw = 'Stopped.';
+    finalizeAi();
+    setBusy(false);
   }
 
   // ---- transcript helpers ------------------------------------------------
@@ -290,7 +300,10 @@
 
   // ---- actions -----------------------------------------------------------
   function runMode(mode, text) {
-    if (busy) return;
+    // No busy guard: a second press cancels the running request and takes over.
+    // main.js sequences the handover so the abandoned run can't report an error
+    // over the top of the new answer.
+    stopThinking();
     setBusy(true);
     cue.ask({ mode, text: text || '' });
   }
@@ -934,16 +947,6 @@
     updateSmartTooltip();
   }
 
-  // ---- example conversation (matches the reference screenshot) ------------
-  function showExample() {
-    clearMessages();
-    addUserBubble('What should I say?');
-    const ai = document.createElement('div');
-    ai.className = 'ai-text';
-    ai.textContent = '“A discounted cash flow model values a company by projecting future free cash flows and discounting them to present value using the weighted average cost of capital.”';
-    messages.appendChild(ai);
-  }
-
   // ---- global keys -------------------------------------------------------
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !scrim.classList.contains('hidden')) closeSettings();
@@ -1230,7 +1233,6 @@
     }
 
     smartBtn.classList.toggle('on', !!settings.smart);
-    showExample();
     syncPlaceholder();
 
     // Fix placeholder shortcut hint to match platform

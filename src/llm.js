@@ -29,7 +29,7 @@ function stripDataUrl(dataUrl) {
   return m ? { mime: m[1], b64: m[2] } : null;
 }
 
-async function streamOpenAI({ apiKey, model, system, turns, imageDataUrl, maxTokens, onToken }) {
+async function streamOpenAI({ apiKey, model, system, turns, imageDataUrl, maxTokens, onToken, signal, isCancelled }) {
   const OpenAI = require('openai');
   const client = new OpenAI({ apiKey });
   const messages = [{ role: 'system', content: system }];
@@ -44,9 +44,10 @@ async function streamOpenAI({ apiKey, model, system, turns, imageDataUrl, maxTok
       messages.push({ role: t.role, content: t.text });
     }
   });
-  const stream = await client.chat.completions.create({ model, messages, stream: true, max_tokens: maxTokens });
+  const stream = await client.chat.completions.create({ model, messages, stream: true, max_tokens: maxTokens }, { signal });
   let full = '';
   for await (const part of stream) {
+    if (isCancelled && isCancelled()) break;
     const d = part.choices && part.choices[0] && part.choices[0].delta && part.choices[0].delta.content;
     if (d) { full += d; onToken(d); }
   }
@@ -79,16 +80,19 @@ function buildAnthropicSystem(system, cacheTtl) {
   return [{ type: 'text', text: system, cache_control }];
 }
 
-async function streamAnthropicClient(client, { model, system, turns, imageDataUrl, maxTokens, onToken, cacheTtl, effort }) {
+async function streamAnthropicClient(client, { model, system, turns, imageDataUrl, maxTokens, onToken, cacheTtl, effort, signal, isCancelled }) {
   const messages = buildAnthropicMessages(turns, imageDataUrl);
   const body = { model, max_tokens: maxTokens, system: buildAnthropicSystem(system, cacheTtl), messages, stream: true };
   // Effort belongs at the TOP LEVEL in output_config. Putting it inside the
   // `thinking` object is a ValidationException. Omitting it entirely leaves the
   // API default of `high`, which is what every mode but debug wants.
   if (effort) body.output_config = { effort };
-  const stream = await client.messages.create(body);
+  // The signal is what makes cancelling possible at all: Claude thinks before
+  // emitting anything, so for minutes at a time there is no chunk to break on.
+  const stream = await client.messages.create(body, { signal });
   let full = '';
   for await (const ev of stream) {
+    if (isCancelled && isCancelled()) break;
     if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') { full += ev.delta.text; onToken(ev.delta.text); }
   }
   return full;
@@ -97,23 +101,26 @@ async function streamAnthropicClient(client, { model, system, turns, imageDataUr
 // `effort` is deliberately not forwarded here. This provider's default models
 // are Claude 3.5, which predate output_config and would reject it outright — a
 // 400 on every debug call. Bedrock is where the Claude 5 models live.
-async function streamAnthropic({ apiKey, model, system, turns, imageDataUrl, maxTokens, onToken }) {
+async function streamAnthropic({ apiKey, model, system, turns, imageDataUrl, maxTokens, onToken, signal, isCancelled }) {
   const Anthropic = require('@anthropic-ai/sdk');
   const client = new Anthropic({ apiKey });
-  return streamAnthropicClient(client, { model, system, turns, imageDataUrl, maxTokens, onToken });
+  return streamAnthropicClient(client, { model, system, turns, imageDataUrl, maxTokens, onToken, signal, isCancelled });
 }
 
-async function streamBedrock({ awsAccessKey, awsSecretKey, awsRegion, awsSessionToken, model, system, turns, imageDataUrl, maxTokens, onToken, effort }) {
+async function streamBedrock({ awsAccessKey, awsSecretKey, awsRegion, awsSessionToken, model, system, turns, imageDataUrl, maxTokens, onToken, effort, signal, isCancelled }) {
   const { AnthropicBedrock } = require('@anthropic-ai/bedrock-sdk');
   const client = new AnthropicBedrock({ awsAccessKey, awsSecretKey, awsRegion, awsSessionToken: awsSessionToken || undefined });
   // 1h TTL rather than the 5m default, because an interview runs far longer
   // than five minutes and the gaps between questions are easily that long.
   // Bedrock takes `ttl` natively; the direct Anthropic API needs a beta header
   // for it, so streamAnthropic deliberately leaves it at the default.
-  return streamAnthropicClient(client, { model, system, turns, imageDataUrl, maxTokens, onToken, cacheTtl: '1h', effort });
+  return streamAnthropicClient(client, { model, system, turns, imageDataUrl, maxTokens, onToken, cacheTtl: '1h', effort, signal, isCancelled });
 }
 
-async function streamGemini({ apiKey, model, system, turns, imageDataUrl, maxTokens, onToken }) {
+// No abort signal here: @google/genai 0.3 doesn't expose one, so a cancel only
+// lands between chunks. Acceptable because Gemini has no long silent thinking
+// phase to be stuck inside.
+async function streamGemini({ apiKey, model, system, turns, imageDataUrl, maxTokens, onToken, isCancelled }) {
   const { GoogleGenAI } = require('@google/genai');
   const ai = new GoogleGenAI({ apiKey });
   const contents = turns.map((t, i) => {
@@ -130,6 +137,7 @@ async function streamGemini({ apiKey, model, system, turns, imageDataUrl, maxTok
   });
   let full = '';
   for await (const chunk of stream) {
+    if (isCancelled && isCancelled()) break;
     const t = chunk && chunk.text;
     if (t) { full += t; onToken(t); }
   }

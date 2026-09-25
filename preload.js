@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('cue', {
   setIgnoreMouse: (v) => ipcRenderer.send('mouse:ignore', v),
   setFocusable: (v) => ipcRenderer.send('window:focusable', v),
   copyText: (text) => ipcRenderer.send('clipboard:write', text),
+  cancelRun: () => ipcRenderer.send('llm:cancel'),
   clearTranscript: () => ipcRenderer.invoke('transcript:clear'),
   openPane: (url) => ipcRenderer.send('open-pane', url),
   appLinkState: () => ipcRenderer.invoke('applink:state'),

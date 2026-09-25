@@ -390,10 +390,38 @@ function setCapturing(active) {
 }
 
 // -------- feature runner --------
+// The one in-flight LLM run. An AbortController rather than a flag because
+// Claude thinks before emitting anything: for minutes there is no chunk to
+// break on, so only tearing down the request actually stops it.
+let activeRun = null;
+let runSeq = 0;
+
+// Returns the run even when it was already cancelled (by the Stop button), so
+// the caller still waits for it to unwind instead of racing its teardown.
+function cancelActiveRun() {
+  const run = activeRun;
+  if (!run) return null;
+  if (!run.cancelled) {
+    run.cancelled = true;
+    try { run.controller.abort(); } catch (e) { /* already finished */ }
+  }
+  return run;
+}
+
 async function runFeature(mode, userText) {
-  if (state.busy) return;
   const def = MODES[mode];
   if (!def) return;
+  // Pressing a second action means "not that, this" — hand over rather than
+  // dropping the press silently. Awaiting the cancelled run is what keeps its
+  // unwinding llm:error from landing *after* the new run's llm:start and
+  // replacing a perfectly good answer with an error for an abandoned request.
+  const previous = cancelActiveRun();
+  if (previous) await previous.done.catch(() => {});
+
+  const run = { id: ++runSeq, controller: new AbortController(), cancelled: false };
+  let settle;
+  run.done = new Promise((resolve) => { settle = resolve; });
+  activeRun = run;
   state.busy = true;
   try {
     const settings = store.getSettings();
@@ -450,17 +478,24 @@ async function runFeature(mode, userText) {
       imageDataUrl,
       maxTokens,
       effort: def.effort, // undefined for every mode but debug — API default is `high`
-      onToken: (t) => send('llm:token', { text: t })
+      signal: run.controller.signal,
+      isCancelled: () => run.cancelled,
+      onToken: (t) => { if (!run.cancelled) send('llm:token', { text: t }); }
     });
+    if (run.cancelled) return; // the user moved on; don't finish or remember it
     // Recorded even for modes that don't read the history back (leetcode), so a
     // follow-up asked through Assist can still pick up what Solve answered.
     rememberAnswer(mode === 'ask' && userText ? userText : (def.userBubble || 'Assist with what is on screen and being said.'), answer);
     send('llm:done', {});
   } catch (e) {
+    // An abort throws here too, but that was deliberate — not something to
+    // record as a failure or show the user as an error.
+    if (run.cancelled) return;
     recordEvent({ level: 'error', event: 'llm_failed', msg: e && e.message ? e.message : String(e), frame: 'runFeature', context: { mode, provider: store.getSettings().provider } });
     send('llm:error', { message: e && e.message ? e.message : String(e) });
   } finally {
-    state.busy = false;
+    if (activeRun === run) { activeRun = null; state.busy = false; }
+    settle();
   }
 }
 
@@ -482,6 +517,7 @@ ipcMain.handle('transcript:clear', () => {
   return { ok: true };
 });
 ipcMain.on('ask', (_e, payload) => runFeature(payload.mode, payload.text));
+ipcMain.on('llm:cancel', () => cancelActiveRun());
 ipcMain.on('mic:pcm', (_e, arrayBuffer) => { if (state.capturing) routeAudio('you', arrayBuffer); });
 ipcMain.on('system:pcm', (_e, arrayBuffer) => { if (state.capturing) routeAudio('them', arrayBuffer); });
 ipcMain.on('mouse:ignore', (_e, v) => { if (win) win.setIgnoreMouseEvents(!!v, { forward: true }); });
