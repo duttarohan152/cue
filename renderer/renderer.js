@@ -892,14 +892,45 @@
   });
 
   // ---- click-through: only the UI blocks the mouse; empty gaps pass to your screen ----
+  // Anything full-screen added to this selector must ALSO get `pointer-events: auto`
+  // in styles.css, or the window stays transparent to the mouse.
+  const UI_SEL = '#toolbar, #panel-wrap, #settings-scrim, #onboard-scrim, #consent-scrim';
+
+  // Accepting the mouse again is an async IPC round trip to the main process, so
+  // deciding it at the moment the pointer lands on a control is already too late:
+  // a mousedown in that gap goes to the app behind. The drag pill suffered worst,
+  // because #toolbar is a -webkit-app-region: drag surface — the window manager
+  // claims those, so the renderer's mousemove there can't be relied on to arm
+  // anything, and the pill is a small target with only 14px of window above it.
+  // Arming while the pointer is still in ordinary space *near* the UI fixes both:
+  // mousemove is reliable there, and the round trip finishes before arrival.
+  const ARM_MARGIN = 14;
   let ignoring = null;
-  function setIgnore(v) { if (v !== ignoring) { ignoring = v; cue.setIgnoreMouse(v); } }
-  document.addEventListener('mousemove', (e) => {
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    const overUI = !!(el && el.closest && el.closest('#toolbar, #panel-wrap, #settings-scrim, #onboard-scrim, #consent-scrim'));
-    setIgnore(!overUI);
-  });
-  setIgnore(true); // start fully click-through; hovering the panel re-enables it
+  let ignoreTimer = null;
+
+  function setIgnore(v) {
+    clearTimeout(ignoreTimer);
+    if (v === ignoring) return;
+    // Arm immediately, disarm lazily: crossing a gap between two controls should
+    // not briefly punch a hole for a click to fall through.
+    if (!v) { ignoring = false; cue.setIgnoreMouse(false); return; }
+    ignoreTimer = setTimeout(() => { ignoring = true; cue.setIgnoreMouse(true); }, 120);
+  }
+
+  function nearUI(x, y) {
+    const el = document.elementFromPoint(x, y);
+    if (el && el.closest && el.closest(UI_SEL)) return true;
+    for (const root of document.querySelectorAll(UI_SEL)) {
+      const r = root.getBoundingClientRect();
+      if (!r.width && !r.height) continue; // a hidden dialog measures zero
+      if (x >= r.left - ARM_MARGIN && x <= r.right + ARM_MARGIN &&
+          y >= r.top - ARM_MARGIN && y <= r.bottom + ARM_MARGIN) return true;
+    }
+    return false;
+  }
+
+  document.addEventListener('mousemove', (e) => setIgnore(!nearUI(e.clientX, e.clientY)));
+  setIgnore(true); // start fully click-through; approaching the panel re-enables it
 
   // ---- focus: leave the window behind us looking active ------------------
   // The overlay is created non-focusable (main.js), so dragging it or pressing
