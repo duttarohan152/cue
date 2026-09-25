@@ -81,27 +81,40 @@
 
   function esc(s) { return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
-  // minimal, safe markdown: fenced code, bullets, inline code, bold, paragraphs
+  // minimal, safe markdown: fenced code, bullets, numbered lists, headings,
+  // inline code, bold. Every branch goes through esc() — this is model output
+  // heading for innerHTML, so the escaping is the only thing standing between a
+  // prompt-injected answer and script running in the renderer.
   function renderMarkdown(text) {
     const lines = text.split('\n');
-    let html = '', inCode = false, inList = false, buf = [];
-    const flushP = () => { if (buf.length) { html += '<p>' + inline(buf.join(' ')) + '</p>'; buf = []; } };
+    let html = '', inCode = false, listTag = null, buf = [];
     const inline = (s) => esc(s)
       .replace(/`([^`]+)`/g, '<code>$1</code>')
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    for (const raw of lines) {
-      const line = raw;
+    // Joined with <br>, not a space: answers are written one point per line, and
+    // folding those back into a single paragraph is what produced the blob.
+    // Closes any open list first, or a plain line following a bullet would emit
+    // a <p> nested inside the <ul>.
+    const flushP = () => { if (buf.length) { closeList(); html += '<p>' + buf.map(inline).join('<br>') + '</p>'; buf = []; } };
+    const closeList = () => { if (listTag) { html += '</' + listTag + '>'; listTag = null; } };
+    const openList = (tag) => { if (listTag !== tag) { closeList(); html += '<' + tag + '>'; listTag = tag; } };
+    for (const line of lines) {
       if (/^```/.test(line.trim())) {
-        if (!inCode) { flushP(); if (inList) { html += '</ul>'; inList = false; } html += '<pre><code>'; inCode = true; }
+        if (!inCode) { flushP(); closeList(); html += '<pre><code>'; inCode = true; }
         else { html += '</code></pre>'; inCode = false; }
         continue;
       }
       if (inCode) { html += esc(line) + '\n'; continue; }
-      if (/^\s*[-*]\s+/.test(line)) { flushP(); if (!inList) { html += '<ul>'; inList = true; } html += '<li>' + inline(line.replace(/^\s*[-*]\s+/, '')) + '</li>'; continue; }
-      if (line.trim() === '') { flushP(); if (inList) { html += '</ul>'; inList = false; } continue; }
+      // Headings aren't asked for, but a model that emits one anyway should not
+      // leave a literal "###" sitting in the answer.
+      const heading = /^\s*#{1,6}\s+(.*)$/.exec(line);
+      if (heading) { flushP(); closeList(); html += '<p class="md-h">' + inline(heading[1].trim()) + '</p>'; continue; }
+      if (/^\s*[-*]\s+/.test(line)) { flushP(); openList('ul'); html += '<li>' + inline(line.replace(/^\s*[-*]\s+/, '')) + '</li>'; continue; }
+      if (/^\s*\d+[.)]\s+/.test(line)) { flushP(); openList('ol'); html += '<li>' + inline(line.replace(/^\s*\d+[.)]\s+/, '')) + '</li>'; continue; }
+      if (line.trim() === '') { flushP(); closeList(); continue; }
       buf.push(line.trim());
     }
-    flushP(); if (inList) html += '</ul>'; if (inCode) html += '</code></pre>';
+    flushP(); closeList(); if (inCode) html += '</code></pre>';
     return html;
   }
 
@@ -124,19 +137,39 @@
     messages.appendChild(aiEl);
   }
 
+  // Markdown is re-rendered as the answer streams, on a timer rather than per
+  // token. Tokens used to be appended as inline spans, and since inline HTML
+  // collapses newlines, every answer read as one run-on paragraph until it
+  // finished — the bullets and the code block only appeared at the very end.
+  const RENDER_MS = 100;
+  let renderTimer = null;
+
+  function paintAi() {
+    if (!aiEl) return;
+    // Replacing innerHTML resets the scroll of the container, which would yank
+    // the view away from wherever the user has scrolled to mid-answer.
+    const keepTop = messages.scrollTop;
+    aiEl.innerHTML = renderMarkdown(aiEl.dataset.raw || '');
+    if (caretEl) aiEl.appendChild(caretEl);
+    messages.scrollTop = keepTop;
+  }
+
+  function scheduleRender() {
+    if (renderTimer) return;
+    renderTimer = setTimeout(() => { renderTimer = null; paintAi(); }, RENDER_MS);
+  }
+
   function appendToken(t) {
     if (!aiEl) startAi(false);
     aiEl.dataset.raw += t;
-    const span = document.createElement('span');
-    span.className = 'w';
-    span.textContent = t;
-    aiEl.insertBefore(span, caretEl);
+    scheduleRender();
   }
 
   function finalizeAi() {
     if (!aiEl) return;
+    clearTimeout(renderTimer); renderTimer = null;
     const raw = aiEl.dataset.raw || '';
-    aiEl.innerHTML = renderMarkdown(raw);
+    aiEl.innerHTML = renderMarkdown(raw); // drops the caret with it
     aiEl = null; caretEl = null;
   }
 

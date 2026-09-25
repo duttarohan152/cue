@@ -147,9 +147,9 @@ button:focus { outline: none; }
   -webkit-user-select: text; user-select: text;
 }
 .ai-text.small { font-size: 16px; line-height: 1.55; }
-.ai-text .w { display: inline; opacity: 0; animation: fadeUp 180ms ease forwards; }
-.ai-text ul { margin: 8px 0; padding-left: 20px; }
+.ai-text ul, .ai-text ol { margin: 8px 0; padding-left: 20px; }
 .ai-text li { margin: 4px 0; }
+.ai-text .md-h { font-weight: 650; margin: 12px 0 4px; }
 .ai-text pre {
   background: rgba(0,0,0,0.35);
   border: 1px solid rgba(255,255,255,0.08);
@@ -487,7 +487,7 @@ button:focus { outline: none; }
 .hidden { display: none !important; }
 
 @media (prefers-reduced-motion: reduce) {
-  #panel, .user-bubble, .ai-text .w { animation: none !important; opacity: 1 !important; transform: none !important; }
+  #panel, .user-bubble { animation: none !important; opacity: 1 !important; transform: none !important; }
   #live-dot { animation: none !important; }
 }
 

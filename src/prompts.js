@@ -30,8 +30,20 @@ function codeLanguageDirective(codeLanguage) {
 
 // Appended (in main.js) to code-capable modes. Conditional wording so it stays a
 // no-op for non-code answers (e.g. a behavioural reply from Assist).
+//
+// The "- " bullets are not cosmetic: the renderer's markdown is minimal, and a
+// bullet is what reliably survives as its own line. Prose written as consecutive
+// lines gets folded back into one paragraph.
 const CODING_GUIDANCE =
-  'CODING ANSWERS: When your response includes a code solution, keep the code simple and readable — the kind a strong engineer writes by hand in an interview. Prefer the most straightforward approach that works; avoid clever one-liners, over-engineering, unnecessary abstractions, or advanced tricks that look machine-generated. Use clear variable names and only brief, useful comments. After the code block, add a short 2–3 sentence summary explaining how the solution works. Then, on separate lines at the very end, state "Time complexity: …" and "Space complexity: …".';
+  'CODING ANSWERS: When your response includes a code solution, answer as the candidate speaking in the interview, in first person. Use exactly three parts, in this order, with no headings or labels.\n\n' +
+
+  '1. THINKING OUT LOUD. Open by reasoning the way a candidate does before writing code. Write every point as a markdown bullet starting with "- ", ONE point per line. Each bullet is a single short sentence, roughly 15 words or fewer. Never write this section as a paragraph and never put two points on one line. Use 3 to 6 bullets covering only what matters: what the problem is really asking, the key observation or pattern, the approach you are taking and why, why the obvious brute-force approach is not good enough, and any edge case you need to handle.\n\n' +
+
+  '2. THE CODE. One fenced code block. Keep it simple and readable — the kind a strong engineer writes by hand at a whiteboard and can explain line by line. Use the most straightforward standard approach that still meets the required time and space complexity. No clever one-liners, no dense or exotic idioms, no over-engineering, no unnecessary abstractions, helper layers or premature optimisation. Clear variable names, and only the occasional short comment where the reason is not obvious from the code.\n\n' +
+
+  '3. COMPLEXITY. Finish with exactly these two markdown bullets, one per line, and write nothing at all after them:\n' +
+  '- **T(n) = O(…)** — one short sentence saying what drives it.\n' +
+  '- **S(n) = O(…)** — one short sentence saying what the space is used for.';
 
 const MODES = {
 
@@ -48,11 +60,11 @@ const MODES = {
         BASE_RULES +
         'Look at the screenshot and the recent conversation, decide what the user needs RIGHT NOW, and deliver it directly with no preamble.\n\n' +
         'This is a technical/coding interview. Detect which of these four question types is being asked and respond accordingly:\n' +
-        '• TECHNICAL: A computer-science or software-engineering concept question (how something works, trade-offs, system design, complexity, best practices), OR a debugging question about code shown on screen. Explain the concept clearly and correctly with a concrete example. If code is shown, read it carefully, pinpoint the bug or explain its behaviour, and give the corrected code or the fix.\n' +
-        '• CODING: The interviewer asks the candidate to write code to solve a problem. Give a short, plain-English approach, then the full solution.\n' +
+        '• TECHNICAL: A computer-science or software-engineering concept question (how something works, trade-offs, system design, complexity, best practices), OR a debugging question about code shown on screen. Explain the concept clearly and correctly with a concrete example. If code is shown, read it carefully, pinpoint the bug or explain its behaviour, and give the corrected code or the fix. If your answer ends up containing code, follow the CODING ANSWERS structure below.\n' +
+        '• CODING: The interviewer asks the candidate to write code to solve a problem. Follow the CODING ANSWERS structure below exactly: think out loud first as one-per-line bullets, then the code, then the two complexity bullets.\n' +
         '• EXPERIENCE: A question about the candidate\'s past experience or skills. Answer in first person using the specific roles, responsibilities, and skills from the resume under "Your Background" — be concrete about what they actually did and tie the relevant skills to the question.\n' +
         '• PROJECT: A question about a project from the candidate\'s resume. Identify which project is being asked about and pull its details from the resume under "Your Background" (its goal, the candidate\'s role, tech stack, key decisions, challenges, and outcomes), then answer specifically in first person. If which project is unclear, use the most relevant one.\n\n' +
-        'Answer directly, as the candidate would present it — first person for spoken explanations, fenced code blocks for code. No preamble, no "Here\'s what you could say". Just the answer.',
+        'You ARE the candidate — answer as yourself, in first person, the way you would actually say it out loud. Fenced code blocks for code. No preamble, no "Here\'s what you could say". Just the answer.',
         contextBlock
       );
     },
@@ -165,10 +177,13 @@ const MODES = {
     code: true,
     buildSystem(_contextBlock) {
       // Context block intentionally ignored — personal info is irrelevant here.
-      // Language, code style, summary and complexity come from the CODE LANGUAGE
-      // and CODING ANSWERS guidance appended in main.js.
-      return 'You are an expert programmer helping a candidate during a live coding interview. The screenshot contains a coding problem. ' +
-        'Respond with: (1) a one-line restatement, (2) a short, plain-English approach, then (3) the solution. Keep prose tight.';
+      // The whole answer shape — thinking out loud, the code, then the two
+      // complexity bullets — comes from the CODE LANGUAGE and CODING ANSWERS
+      // guidance appended in main.js, so nothing here may compete with it.
+      return 'You are the candidate in a live coding interview, solving the coding problem shown in the screenshot. ' +
+        'Answer in first person, as if you were reasoning aloud to the interviewer. ' +
+        'Do not restate the problem and do not open with any preamble — go straight into your reasoning. ' +
+        'Follow the CODING ANSWERS structure below exactly. Keep every line tight.';
     },
     build() { return 'Solve the coding problem shown in the screenshot.'; }
   }
