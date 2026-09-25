@@ -37,7 +37,25 @@ const state = { capturing: false, busy: false, transcribing: { you: false, them:
 let sttDisabled = false; // set when the key can't reach any speech model (stops retry spam)
 const buffers = { you: [], them: [] };
 const transcript = []; // { channel, text, ts } — capped at MAX_TRANSCRIPT_TURNS
-const MAX_TRANSCRIPT_TURNS = 200; // ~30–40 minutes of conversation at normal pace
+// A turn is one finalized STT utterance, not an exchange, so these accumulate
+// at roughly 6-10 per minute of conversation — the old cap of 200 was silently
+// dropping the start of any interview past ~20-30 minutes, including the
+// problem statement a later question referred back to. 1000 turns is ~67 KB of
+// strings and covers a long interview end to end.
+const MAX_TRANSCRIPT_TURNS = 1000;
+
+// cue's own recent answers, replayed as assistant turns so a follow-up lands on
+// the solution it actually gave rather than one re-derived from whatever is on
+// screen. Without this the model could contradict its own earlier reasoning —
+// it had no idea it had said anything.
+//
+// Bounded twice over, because a stale answer is worse than none: an answer from
+// the previous problem would quietly steer a fresh question. Three is enough to
+// carry a solution plus a round of follow-ups.
+const answerHistory = []; // { label, text, ts }
+const ANSWER_HISTORY_MAX = 3;
+const ANSWER_HISTORY_MS = 15 * 60 * 1000;
+const ANSWER_CLIP = 8000; // chars — a full solution is well under this
 const FLUSH_MS = 900;
 const MIN_BYTES = Math.floor(16000 * 2 * 0.12); // ~0.12s
 const RMS_GATE = 180;
@@ -74,6 +92,28 @@ function pushTranscript(turn) {
 }
 
 function send(channel, data) { if (win && !win.isDestroyed()) win.webContents.send(channel, data); }
+
+// Replayed as real user/assistant pairs rather than pasted into the prompt, so
+// the model treats them as its own prior turns. The stand-in user turn is a
+// short label, not the original message — that one embedded the whole
+// transcript as it stood then, which is both huge and now out of date.
+function historyTurns(def) {
+  if (def.skipHistory) return [];
+  const cutoff = Date.now() - ANSWER_HISTORY_MS;
+  const turns = [];
+  for (const a of answerHistory) {
+    if (a.ts < cutoff) continue;
+    turns.push({ role: 'user', text: a.label });
+    turns.push({ role: 'assistant', text: a.text });
+  }
+  return turns;
+}
+
+function rememberAnswer(label, text) {
+  if (!text || !text.trim()) return;
+  answerHistory.push({ label, text: text.slice(0, ANSWER_CLIP), ts: Date.now() });
+  if (answerHistory.length > ANSWER_HISTORY_MAX) answerHistory.splice(0, answerHistory.length - ANSWER_HISTORY_MAX);
+}
 
 // -------- window --------
 function createWindow() {
@@ -396,13 +436,16 @@ async function runFeature(mode, userText) {
     const maxTokens = def.code
       ? (settings.smart ? 64000 : 32000)
       : (settings.smart ? 32000 : 16000);
-    await llm.stream({
+    const answer = await llm.stream({
       system,
-      turns: [{ role: 'user', text: built }],
+      turns: [...historyTurns(def), { role: 'user', text: built }],
       imageDataUrl,
       maxTokens,
       onToken: (t) => send('llm:token', { text: t })
     });
+    // Recorded even for modes that don't read the history back (leetcode), so a
+    // follow-up asked through Assist can still pick up what Solve answered.
+    rememberAnswer(mode === 'ask' && userText ? userText : (def.userBubble || 'Assist with what is on screen and being said.'), answer);
     send('llm:done', {});
   } catch (e) {
     recordEvent({ level: 'error', event: 'llm_failed', msg: e && e.message ? e.message : String(e), frame: 'runFeature', context: { mode, provider: store.getSettings().provider } });
@@ -424,6 +467,9 @@ ipcMain.handle('platform:info', () => ({
 }));
 ipcMain.handle('transcript:clear', () => {
   transcript.splice(0, transcript.length);
+  // Clear means start fresh, so cue's own answers go too — otherwise it would
+  // keep referring back to a solution the user has deliberately moved on from.
+  answerHistory.splice(0, answerHistory.length);
   return { ok: true };
 });
 ipcMain.on('ask', (_e, payload) => runFeature(payload.mode, payload.text));

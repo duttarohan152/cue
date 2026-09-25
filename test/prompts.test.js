@@ -96,6 +96,28 @@ test('technical questions reach the explanation guidance', () => {
   assert.ok(!MODES.leetcode.buildSystem(null).includes(EXPLANATION_GUIDANCE));
 });
 
+test('leetcode carries the conversation so spoken constraints reach it', () => {
+  const transcript = [{ channel: 'them', text: 'Now do it in O(1) extra space.', ts: Date.now() }];
+  const built = MODES.leetcode.build({ transcript, userText: '' });
+  assert.match(built, /O\(1\) extra space/);
+  assert.match(built, /Solve the coding problem shown in the screenshot/);
+});
+
+test('leetcode still works before anything has been heard', () => {
+  const built = MODES.leetcode.build({ transcript: [], userText: '' });
+  assert.match(built, /Solve the coding problem shown in the screenshot/);
+  assert.ok(!/Conversation so far/.test(built), 'no empty conversation header');
+});
+
+test('only leetcode opts out of cue\'s answer history', () => {
+  // Every press of Solve is a clean attempt at what is on screen now; the other
+  // modes need continuity so a follow-up lands on the answer already given.
+  assert.equal(MODES.leetcode.skipHistory, true);
+  for (const name of ['assist', 'say', 'ask', 'followup', 'recap']) {
+    assert.ok(!MODES[name].skipHistory, `${name} should receive answer history`);
+  }
+});
+
 test('followup mode returns a bullet list', () => {
   const system = MODES.followup.buildSystem(null);
   assert.match(system, /bullet list|bullets/i);

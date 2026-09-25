@@ -8,12 +8,15 @@ function formatTranscript(turns, limit) {
 }
 
 // How many transcript turns each mode sends. A "turn" here is an STT utterance,
-// not a conversational exchange — Deepgram finalises every few seconds — so the
-// old limits (14 for assist) covered well under two minutes of an interview and
-// routinely cut off the problem statement the question referred back to. Sonnet
-// 5 and Opus 5 hold 1M tokens and a full 200-turn transcript is a few thousand,
-// so recency, not budget, is the only reason to trim at all.
-const TURNS = { assist: 60, say: 60, ask: 50, followup: 80 };
+// not a conversational exchange — Deepgram finalises every few seconds, so these
+// run 6-10 per minute of conversation. 250 covers roughly 25-40 minutes, which
+// is what it takes to still have the problem statement in view when the
+// interviewer refers back to it half an hour later.
+//
+// When the budget is not the constraint: 250 turns is ~5.6k tokens, well under 1% of
+// the 1M window, and less than the screenshot costs. Recency is the only reason
+// to trim at all.
+const TURNS = { assist: 250, say: 250, ask: 250, followup: 300, leetcode: 250 };
 
 function buildSystem(base, contextBlock) {
   if (!contextBlock) return base;
@@ -195,6 +198,11 @@ const MODES = {
     needsScreen: true,
     userBubble: 'Solve what\'s on screen',
     small: false,
+    // Solve deliberately never sees cue's earlier answers: each press is a
+    // clean attempt at what is on screen now, not a revision of a previous one.
+    // It still contributes its answer, so a follow-up through Assist can pick
+    // up the solution Solve gave.
+    skipHistory: true,
     resumeMode: 'leetcode',
     code: true,
     buildSystem(_contextBlock) {
@@ -205,9 +213,17 @@ const MODES = {
       return 'You are the candidate in a live coding interview, solving the coding problem shown in the screenshot. ' +
         'Answer in first person, as if you were reasoning aloud to the interviewer. ' +
         'Do not restate the problem and do not open with any preamble — go straight into your reasoning. ' +
+        'The conversation may carry extra constraints the interviewer added out loud that are not written on screen — follow them, and prefer them over what the screenshot implies when the two disagree. ' +
         'Follow the CODING ANSWERS structure below exactly. Keep every line tight.';
     },
-    build() { return 'Solve the coding problem shown in the screenshot.'; }
+    build(ctx) {
+      // The screenshot alone misses constraints the interviewer only said
+      // ("now do it in O(1) space"), which was the common way this mode gave a
+      // confidently wrong answer. Still no personal context — see buildSystem.
+      const t = formatTranscript(ctx.transcript, TURNS.leetcode);
+      return (t ? 'Conversation so far (the interviewer may have added constraints out loud):\n' + t + '\n\n' : '') +
+        'Solve the coding problem shown in the screenshot.';
+    }
   }
 };
 
