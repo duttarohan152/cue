@@ -260,6 +260,12 @@ const MODES = {
     inferLanguage: true,
     // Replaces CODING_GUIDANCE, which mandates an incompatible shape.
     guidance: DEBUG_GUIDANCE,
+    // The one mode that lowers effort from the API default of `high`. Reading a
+    // screenshot line by line and enumerating every fault is the heaviest
+    // thinking cue asks for, and thinking happens before any visible token — so
+    // at `high` the wait reads as a hang. Every other mode omits this and keeps
+    // the default. Only reaches Bedrock; see llm.js.
+    effort: 'medium',
     // No skipHistory: debugging is iterative, and "now fix that one too" has to
     // land on the answer cue already gave rather than starting over.
     buildSystem(_contextBlock) {

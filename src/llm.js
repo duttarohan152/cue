@@ -79,9 +79,14 @@ function buildAnthropicSystem(system, cacheTtl) {
   return [{ type: 'text', text: system, cache_control }];
 }
 
-async function streamAnthropicClient(client, { model, system, turns, imageDataUrl, maxTokens, onToken, cacheTtl }) {
+async function streamAnthropicClient(client, { model, system, turns, imageDataUrl, maxTokens, onToken, cacheTtl, effort }) {
   const messages = buildAnthropicMessages(turns, imageDataUrl);
-  const stream = await client.messages.create({ model, max_tokens: maxTokens, system: buildAnthropicSystem(system, cacheTtl), messages, stream: true });
+  const body = { model, max_tokens: maxTokens, system: buildAnthropicSystem(system, cacheTtl), messages, stream: true };
+  // Effort belongs at the TOP LEVEL in output_config. Putting it inside the
+  // `thinking` object is a ValidationException. Omitting it entirely leaves the
+  // API default of `high`, which is what every mode but debug wants.
+  if (effort) body.output_config = { effort };
+  const stream = await client.messages.create(body);
   let full = '';
   for await (const ev of stream) {
     if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') { full += ev.delta.text; onToken(ev.delta.text); }
@@ -89,20 +94,23 @@ async function streamAnthropicClient(client, { model, system, turns, imageDataUr
   return full;
 }
 
+// `effort` is deliberately not forwarded here. This provider's default models
+// are Claude 3.5, which predate output_config and would reject it outright — a
+// 400 on every debug call. Bedrock is where the Claude 5 models live.
 async function streamAnthropic({ apiKey, model, system, turns, imageDataUrl, maxTokens, onToken }) {
   const Anthropic = require('@anthropic-ai/sdk');
   const client = new Anthropic({ apiKey });
   return streamAnthropicClient(client, { model, system, turns, imageDataUrl, maxTokens, onToken });
 }
 
-async function streamBedrock({ awsAccessKey, awsSecretKey, awsRegion, awsSessionToken, model, system, turns, imageDataUrl, maxTokens, onToken }) {
+async function streamBedrock({ awsAccessKey, awsSecretKey, awsRegion, awsSessionToken, model, system, turns, imageDataUrl, maxTokens, onToken, effort }) {
   const { AnthropicBedrock } = require('@anthropic-ai/bedrock-sdk');
   const client = new AnthropicBedrock({ awsAccessKey, awsSecretKey, awsRegion, awsSessionToken: awsSessionToken || undefined });
   // 1h TTL rather than the 5m default, because an interview runs far longer
   // than five minutes and the gaps between questions are easily that long.
   // Bedrock takes `ttl` natively; the direct Anthropic API needs a beta header
   // for it, so streamAnthropic deliberately leaves it at the default.
-  return streamAnthropicClient(client, { model, system, turns, imageDataUrl, maxTokens, onToken, cacheTtl: '1h' });
+  return streamAnthropicClient(client, { model, system, turns, imageDataUrl, maxTokens, onToken, cacheTtl: '1h', effort });
 }
 
 async function streamGemini({ apiKey, model, system, turns, imageDataUrl, maxTokens, onToken }) {

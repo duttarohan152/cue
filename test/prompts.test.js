@@ -150,6 +150,16 @@ test('debug mode swaps the guidance block and infers the language', () => {
   assert.ok(!MODES.debug.skipHistory, 'debugging is iterative, it needs the history');
 });
 
+test('only debug lowers effort; every other mode keeps the API default', () => {
+  // Omitting `effort` is what leaves the model at its default of `high`, so an
+  // accidental value on another mode would quietly downgrade its answers.
+  assert.equal(MODES.debug.effort, 'medium');
+  for (const [name, def] of Object.entries(MODES)) {
+    if (name === 'debug') continue;
+    assert.equal(def.effort, undefined, `${name} must not set effort`);
+  }
+});
+
 test('debug mode ignores personal context but carries the conversation', () => {
   const system = MODES.debug.buildSystem('IGNORED_CONTEXT');
   assert.ok(!system.includes('IGNORED_CONTEXT'), 'debug should not include the context block');

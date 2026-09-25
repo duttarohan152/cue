@@ -449,6 +449,7 @@ async function runFeature(mode, userText) {
       turns: [...historyTurns(def), { role: 'user', text: built }],
       imageDataUrl,
       maxTokens,
+      effort: def.effort, // undefined for every mode but debug — API default is `high`
       onToken: (t) => send('llm:token', { text: t })
     });
     // Recorded even for modes that don't read the history back (leetcode), so a

@@ -212,6 +212,28 @@
 
   function setBusy(v) { busy = v; $('#send-btn').classList.toggle('busy', v); }
 
+  // Claude 5 thinks before emitting a single visible token, so between the
+  // request and the first word cue showed nothing but a blinking caret — on the
+  // heavier modes that reads as a hang rather than as work. The elapsed count is
+  // the point: it makes a long wait legibly a wait.
+  let thinkingEl = null, thinkingTimer = null;
+  function startThinking(group) {
+    stopThinking();
+    const started = Date.now();
+    thinkingEl = document.createElement('div');
+    thinkingEl.className = 'ai-thinking';
+    thinkingEl.textContent = 'Thinking…';
+    group.appendChild(thinkingEl);
+    thinkingTimer = setInterval(() => {
+      if (!thinkingEl) return;
+      thinkingEl.textContent = 'Thinking… ' + Math.round((Date.now() - started) / 1000) + 's';
+    }, 1000);
+  }
+  function stopThinking() {
+    clearInterval(thinkingTimer); thinkingTimer = null;
+    if (thinkingEl) { thinkingEl.remove(); thinkingEl = null; }
+  }
+
   // ---- transcript helpers ------------------------------------------------
   let transcriptOpen = false;
   let transcriptInterimEl = null;
@@ -689,13 +711,15 @@
     caretEl.className = 'ai-caret';
     aiEl.appendChild(caretEl);
     group.appendChild(aiEl);
+    startThinking(group);
     messages.appendChild(group);
     sep.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setBusy(true);
   });
-  cue.on('llm:token', ({ text }) => appendToken(text));
-  cue.on('llm:done', () => { finalizeAi(); setBusy(false); });
+  cue.on('llm:token', ({ text }) => { stopThinking(); appendToken(text); });
+  cue.on('llm:done', () => { stopThinking(); finalizeAi(); setBusy(false); });
   cue.on('llm:error', ({ message }) => {
+    stopThinking();
     if (!aiEl) startAi(true);
     aiEl.dataset.raw = message; finalizeAi(); setBusy(false);
   });
