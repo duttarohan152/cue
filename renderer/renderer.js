@@ -1098,7 +1098,41 @@
   const assistShortcut = isWindows ? '<span class="kbd">Ctrl</span> <span class="kbd">↵</span>' : '<span class="kbd">⌘</span> <span class="kbd">↵</span>';
   const solveShortcut = isWindows ? '<span class="kbd">Ctrl</span> <span class="kbd">H</span>' : '<span class="kbd">⌘</span> <span class="kbd">H</span>';
   const quitShortcut = isWindows ? '<span class="kbd">Ctrl</span><span class="kbd">⇧</span><span class="kbd">X</span>' : '<span class="kbd">⌘</span><span class="kbd">⇧</span><span class="kbd">X</span>';
+  // Mirrors registerShortcuts() in main.js plus the in-window keydown handlers.
+  // Change one and change the other — nothing links them.
+  const MOD = isWindows ? 'Ctrl' : '⌘';
+  const GLOBAL_KEYS = [
+    ['Assist with your screen and the conversation', [MOD, '↵']],
+    ['Suggest what to say next', [MOD, '⇧', '↵']],
+    ['Solve the coding problem on screen', [MOD, 'H']],
+    ['Debug the code on screen', [MOD, '⇧', 'D']],
+    ['Switch between Smart and Fast models', [MOD, '⇧', 'M']],
+    ['Cycle code language (Auto / C / C++)', [MOD, '⇧', 'L']],
+    ['Clear the transcript and answers', [MOD, '⇧', 'K']],
+    ['Hide or show the panel', [MOD, '\\']],
+    ['Quit cue', [MOD, '⇧', 'X']]
+  ];
+  // Kept separate because these genuinely differ: cue is non-focusable until a
+  // field or dialog is in use, so these only reach it then.
+  const TYPING_KEYS = [
+    ['Send your question', ['↵']],
+    ['New line without sending', ['⇧', '↵']],
+    ['Open Settings', [MOD, ',']],
+    ['Close a dialog', ['Esc']]
+  ];
+  const keyRows = (rows) => '<div class="ob-keys">' + rows.map(([label, keys]) =>
+    '<div class="ob-key-row"><span>' + label + '</span><span class="ob-key-combo">' +
+    keys.map((k) => '<span class="kbd">' + k + '</span>').join('') + '</span></div>').join('') + '</div>';
+
   const OB_STEPS = [
+    {
+      icon: '⌨️',
+      title: 'Keyboard shortcuts',
+      body: '<strong>These work anywhere.</strong> You don\'t need to click cue first, and whatever app you\'re in keeps its focus.' +
+        keyRows(GLOBAL_KEYS) +
+        '<div class="ob-keys-head"><strong>While typing in cue, or with a dialog open:</strong></div>' +
+        keyRows(TYPING_KEYS)
+    },
     {
       icon: '👋',
       title: 'Welcome to cue',

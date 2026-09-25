@@ -399,7 +399,13 @@ button:focus { outline: none; }
 .ob-dots span.on { background: var(--accent); width: 20px; border-radius: 4px; }
 .ob-icon { display: flex; justify-content: center; margin-bottom: 14px; font-size: 34px; line-height: 1; }
 .ob-title { font-size: 20px; font-weight: 700; color: var(--tx-1); margin-bottom: 10px; letter-spacing: -0.01em; }
-.ob-body { font-size: 14px; line-height: 1.6; color: var(--tx-2); text-align: left; -webkit-user-select: text; user-select: text; }
+/* Capped so the shortcut card, the tallest one, can't push the buttons off a
+   600px window. Shorter cards are unaffected. */
+.ob-body { font-size: 14px; line-height: 1.6; color: var(--tx-2); text-align: left; -webkit-user-select: text; user-select: text; max-height: 52vh; overflow-y: auto; }
+.ob-keys { display: flex; flex-direction: column; gap: 4px; margin: 10px 0 2px; }
+.ob-key-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; font-size: 13px; line-height: 1.35; }
+.ob-key-combo { display: inline-flex; gap: 3px; flex-shrink: 0; }
+.ob-keys-head { margin-top: 14px; }
 .ob-body strong { color: #fff; font-weight: 600; }
 .ob-body .kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 6px; background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.16); font-size: 12px; font-weight: 600; color: #fff; }
 .ob-body ul { padding-left: 18px; margin: 8px 0; }
