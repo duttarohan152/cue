@@ -2,7 +2,7 @@ const { app, BrowserWindow, ipcMain, globalShortcut, screen, session, desktopCap
 const path = require('path');
 const os = require('os');
 const store = require('./src/store');
-const { captureScreenshot } = require('./src/screen');
+const { captureScreenshot, primeCapture } = require('./src/screen');
 const { createSTT } = require('./src/stt');
 const { createLLM } = require('./src/llm');
 const { MODES, codeLanguageDirective, CODING_GUIDANCE } = require('./src/prompts');
@@ -372,7 +372,9 @@ async function runFeature(mode, userText) {
       try { imageDataUrl = await captureScreenshot(); }
       catch (e) {
         recordEvent({ level: 'error', event: 'screen_capture_failed', msg: e && e.message ? e.message : String(e), frame: 'captureScreenshot', context: { mode } });
-        send('status', { message: 'Screen capture needs permission — grant screen/audio access to cue in your system settings.' });
+        // Say that the answer is going out blind. Silently dropping the image
+        // just made the model look like it had ignored the screen.
+        send('status', { message: 'Could not see the screen — answering from the conversation alone. If this keeps happening, check that Screen Recording is granted in System Settings.' });
       }
     }
 
@@ -508,6 +510,7 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+  primeCapture(); // deliberately not awaited — startup must not wait on it
   registerShortcuts();
 
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });

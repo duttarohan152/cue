@@ -10,8 +10,30 @@ const { desktopCapturer, screen } = require('electron');
 const MAX_EDGE = 1568;
 const B64_TARGET = Math.floor(4.5 * 1024 * 1024); // safety margin under the 5 MB cap
 
+// On macOS the first getSources() call in a fresh process reliably hands back an
+// empty thumbnail — ScreenCaptureKit hasn't produced a frame yet — and sometimes
+// the second one does too. The source itself is present and the permission is
+// granted, so there is nothing to report; it just needs another go. Without this
+// the first Assist/Solve after launch answered without ever seeing the screen.
+const ATTEMPTS = 4;
+const RETRY_MS = 200;
+
 function fitsBase64(buf) {
   return Math.ceil(buf.length / 3) * 4 <= B64_TARGET;
+}
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function grabThumbnail(primary, thumbW, thumbH) {
+  const sources = await desktopCapturer.getSources({
+    types: ['screen'],
+    thumbnailSize: { width: thumbW, height: thumbH }
+  });
+  if (!sources.length) return null;
+  // Prefer the primary display source.
+  const src = sources.find((s) => String(s.display_id) === String(primary.id)) || sources[0];
+  const img = src.thumbnail;
+  return img && !img.isEmpty() ? img : null;
 }
 
 async function captureScreenshot() {
@@ -24,15 +46,15 @@ async function captureScreenshot() {
   const thumbW = Math.max(1, Math.round(nativeW * capScale));
   const thumbH = Math.max(1, Math.round(nativeH * capScale));
 
-  const sources = await desktopCapturer.getSources({
-    types: ['screen'],
-    thumbnailSize: { width: thumbW, height: thumbH }
-  });
-  if (!sources.length) return null;
-  // Prefer the primary display source.
-  const src = sources.find((s) => String(s.display_id) === String(primary.id)) || sources[0];
-  const img = src.thumbnail;
-  if (!img || img.isEmpty()) return null;
+  let img = null;
+  for (let attempt = 0; attempt < ATTEMPTS && !img; attempt++) {
+    if (attempt) await wait(RETRY_MS);
+    img = await grabThumbnail(primary, thumbW, thumbH);
+  }
+  // Throw rather than return null: a silent null left runFeature sending the
+  // question to the model with no image and no warning, so the answer looked
+  // like the model had simply ignored the screen.
+  if (!img) throw new Error('Screen capture came back blank after ' + ATTEMPTS + ' attempts.');
 
   // PNG first (crisp text); fall back to progressively smaller JPEG if needed.
   const png = img.toPNG();
@@ -46,4 +68,12 @@ async function captureScreenshot() {
   return 'data:image/jpeg;base64,' + small.toJPEG(40).toString('base64');
 }
 
-module.exports = { captureScreenshot };
+// Absorbs the warm-up above at launch instead of during an interview: primed,
+// a capture settles at a steady ~400ms, unprimed it runs 1-4s while the retries
+// play out. Fire-and-forget — if it fails, captureScreenshot still retries.
+async function primeCapture() {
+  try { await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 2, height: 2 } }); }
+  catch (e) { /* ignore */ }
+}
+
+module.exports = { captureScreenshot, primeCapture };
