@@ -39,6 +39,16 @@ html, body {
   user-select: none;
 }
 
+/* The cursor is drawn by the OS compositor, not by the window, so
+   setContentProtection cannot hide it. A hand or an I-beam moving over what
+   looks like empty desktop is a giveaway on a screen share, so the arrow never
+   changes shape anywhere in the overlay — not over buttons, not over the drag
+   pill, not over text fields.
+   Deliberately !important: it has to beat the UA stylesheet's I-beam on inputs
+   and textareas as well as every `cursor: pointer` further down. Those are left
+   in place to document which elements are meant to be clickable. */
+body, body * { cursor: default !important; }
+
 /* ============================ Layout ============================ */
 /* Transparent window: no in-page background. You see your real screen behind the panel.
    Empty areas are made click-through from the renderer so they don't block your screen. */

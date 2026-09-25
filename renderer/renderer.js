@@ -1102,15 +1102,15 @@
   // Change one and change the other — nothing links them.
   const MOD = isWindows ? 'Ctrl' : '⌘';
   const GLOBAL_KEYS = [
-    ['Assist with your screen and the conversation', [MOD, '↵']],
+    ['Assist (screen + transcript + lookback)', [MOD, '↵']],
     ['Suggest what to say next', [MOD, '⇧', '↵']],
-    ['Solve the coding problem on screen', [MOD, 'H']],
-    ['Debug the code on screen', [MOD, '⇧', 'D']],
-    ['Switch between Smart and Fast models', [MOD, '⇧', 'M']],
-    ['Cycle code language (Auto / C / C++)', [MOD, '⇧', 'L']],
+    ['Solve (screen, no lookback)', [MOD, 'H']],
+    ['Debug (screen + transcript + lookback)', [MOD, '⇧', 'D']],
+    ['Toggle Smart mode', [MOD, '⇧', 'M']],
+    ['Cycle language (Auto / C / C++)', [MOD, '⇧', 'L']],
     ['Clear the transcript and answers', [MOD, '⇧', 'K']],
-    ['Hide or show the panel', [MOD, '\\']],
-    ['Quit cue', [MOD, '⇧', 'X']]
+    ['Hide or Show', [MOD, '\\']],
+    ['Quit', [MOD, '⇧', 'X']]
   ];
   // Kept separate because these genuinely differ: cue is non-focusable until a
   // field or dialog is in use, so these only reach it then.
