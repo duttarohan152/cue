@@ -113,10 +113,22 @@ function createWindow() {
 
   // Fix 1: On Windows, set type:'toolbar' which sets WS_EX_TOOLWINDOW.
   // This removes the window from Alt+Tab AND the taskbar entirely.
-  // On macOS, this is not needed (dock hiding + Mission Control handle it).
+  // On macOS 'panel' is an NSPanel with NSWindowStyleMaskNonactivatingPanel, so
+  // clicking the overlay never activates cue (dock hiding + Mission Control
+  // already cover what 'toolbar' does on Windows).
   if (isWindows) {
     winOptions.type = 'toolbar';
+  } else if (isMac) {
+    winOptions.type = 'panel';
   }
+
+  // Dragging the overlay or pressing one of its buttons used to make the window
+  // behind it go inactive, and on a screen share that dimming is the giveaway.
+  // A non-focusable window still receives clicks, it just never becomes the key
+  // window, so the app behind keeps its caret and its active title bar. The
+  // renderer turns this back on for text fields (see 'window:focusable').
+  // Skipped on Linux, where focusable:false stops the window talking to the WM.
+  if (isMac || isWindows) winOptions.focusable = false;
 
   win = new BrowserWindow(winOptions);
 
@@ -414,6 +426,20 @@ ipcMain.on('ask', (_e, payload) => runFeature(payload.mode, payload.text));
 ipcMain.on('mic:pcm', (_e, arrayBuffer) => { if (state.capturing) routeAudio('you', arrayBuffer); });
 ipcMain.on('system:pcm', (_e, arrayBuffer) => { if (state.capturing) routeAudio('them', arrayBuffer); });
 ipcMain.on('mouse:ignore', (_e, v) => { if (win) win.setIgnoreMouseEvents(!!v, { forward: true }); });
+// Text entry is the only thing that genuinely needs the keyboard, so the
+// renderer grants focusability for it and takes it back afterwards. Never
+// release it with win.blur() — on macOS that also drops the window to the back
+// of the z-order, which would undo always-on-top.
+ipcMain.on('window:focusable', (_e, focusable) => {
+  if (!win || win.isDestroyed() || (!isMac && !isWindows)) return;
+  win.setFocusable(!!focusable);
+  // Windows decides activation at mousedown, so the click that opened a field
+  // races this message; focusing explicitly lands the caret on the first press.
+  // Not done on macOS, where focus() activates the app and would reintroduce
+  // exactly the un-focus this is meant to prevent — the non-activating panel
+  // takes key status on its own.
+  if (focusable && isWindows) win.focus();
+});
 ipcMain.on('open-pane', (_e, url) => { shell.openExternal(url).catch(() => {}); });
 ipcMain.on('log', (_e, msg) => console.log('[renderer]', msg));
 ipcMain.on('app:quit', () => app.quit());

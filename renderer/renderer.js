@@ -837,6 +837,37 @@
   });
   setIgnore(true); // start fully click-through; hovering the panel re-enables it
 
+  // ---- focus: leave the window behind us looking active ------------------
+  // The overlay is created non-focusable (main.js), so dragging it or pressing
+  // a button no longer makes the app behind go inactive — on a screen share
+  // that dimming is what gives cue away. Text fields and dialogs are the only
+  // places that need the keyboard, so focusability is granted there and taken
+  // back as soon as they are done with.
+  const KEYBOARD_SEL = 'input, textarea, [contenteditable="true"]';
+  const OPEN_MODAL_SEL = '#settings-scrim:not(.hidden), #onboard-scrim:not(.hidden), #consent-scrim:not(.hidden)';
+  let windowFocusable = false;
+  function setWindowFocusable(v) {
+    if (v === windowFocusable) return;
+    windowFocusable = v;
+    cue.setFocusable(v);
+  }
+  const wantsKeyboard = (el) => !!(el && el.closest && el.closest(KEYBOARD_SEL));
+  function syncWindowFocusable() {
+    setWindowFocusable(wantsKeyboard(document.activeElement) || !!document.querySelector(OPEN_MODAL_SEL));
+  }
+  // Ahead of the click, so the caret appears on the first press, not the second.
+  document.addEventListener('mousedown', (e) => { if (wantsKeyboard(e.target)) setWindowFocusable(true); }, true);
+  document.addEventListener('focusin', syncWindowFocusable);
+  // Deferred: moving between two fields reports the old one leaving first.
+  document.addEventListener('focusout', () => setTimeout(syncWindowFocusable, 0));
+  // Watched rather than called from each open/close site — there are six of
+  // them, and a missed one strands the window unable to type.
+  const modalObserver = new MutationObserver(syncWindowFocusable);
+  ['#settings-scrim', '#onboard-scrim', '#consent-scrim'].forEach((sel) => {
+    const el = document.querySelector(sel);
+    if (el) modalObserver.observe(el, { attributes: true, attributeFilter: ['class'] });
+  });
+
   // ---- assistant access request ------------------------------------------
   // Shown here rather than as a native dialog because cue hides its dock icon:
   // an OS panel from an accessory app never comes forward and cannot be
