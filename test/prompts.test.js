@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { MODES, CODING_GUIDANCE, EXPLANATION_GUIDANCE, codeLanguageDirective } = require('../src/prompts');
+const { MODES, CODING_GUIDANCE, EXPLANATION_GUIDANCE, DEBUG_GUIDANCE, codeLanguageDirective } = require('../src/prompts');
 
 test('code language directive pins C and C++', () => {
   assert.match(codeLanguageDirective('c'), /write it in C\b/);
@@ -116,6 +116,47 @@ test('only leetcode opts out of cue\'s answer history', () => {
   for (const name of ['assist', 'say', 'ask', 'followup', 'recap']) {
     assert.ok(!MODES[name].skipHistory, `${name} should receive answer history`);
   }
+});
+
+test('debug guidance reports each bug with a line number, one per line', () => {
+  assert.match(DEBUG_GUIDANCE, /one bug per line/i);
+  assert.match(DEBUG_GUIDANCE, /starting with "- "/);
+  assert.match(DEBUG_GUIDANCE, /exact line number/i);
+  // Guessing a line number sends the candidate to the wrong place on screen
+  // while the interviewer is watching, which is worse than admitting it.
+  assert.match(DEBUG_GUIDANCE, /Line not visible/);
+  assert.match(DEBUG_GUIDANCE, /never invent a bug/i);
+});
+
+test('debug guidance keeps optimisations last and secondary', () => {
+  assert.match(DEBUG_GUIDANCE, /## Optimisations/);
+  assert.match(DEBUG_GUIDANCE, /OPTIMISATIONS last/);
+  assert.match(DEBUG_GUIDANCE, /never mix them in among the bugs/i);
+});
+
+test('debug guidance inverts only when optimisation was actually asked for', () => {
+  assert.match(DEBUG_GUIDANCE, /invert the order/i);
+  assert.match(DEBUG_GUIDANCE, /performance, efficiency, complexity or optimisation/i);
+  assert.match(DEBUG_GUIDANCE, /not a request to optimise/i);
+});
+
+test('debug mode swaps the guidance block and infers the language', () => {
+  // main.js appends CODING_GUIDANCE to every code mode unless the mode brings
+  // its own; the two contracts cannot coexist. And a pinned C++ would write
+  // fixes in the wrong language for a Python snippet on screen.
+  assert.equal(MODES.debug.code, true);
+  assert.equal(MODES.debug.guidance, DEBUG_GUIDANCE);
+  assert.equal(MODES.debug.inferLanguage, true);
+  assert.ok(!MODES.debug.skipHistory, 'debugging is iterative, it needs the history');
+});
+
+test('debug mode ignores personal context but carries the conversation', () => {
+  const system = MODES.debug.buildSystem('IGNORED_CONTEXT');
+  assert.ok(!system.includes('IGNORED_CONTEXT'), 'debug should not include the context block');
+  const transcript = [{ channel: 'them', text: 'Focus on the memory leak first.', ts: Date.now() }];
+  const built = MODES.debug.build({ transcript, userText: '' });
+  assert.match(built, /memory leak/);
+  assert.match(built, /code shown in the screenshot/);
 });
 
 test('followup mode returns a bullet list', () => {

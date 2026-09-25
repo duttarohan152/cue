@@ -17,7 +17,7 @@ let win = null;
 // false when another application already owns the combination, and nothing used
 // to look at that — so the only symptom was a key that did nothing. Iris reads
 // this and can say which key is taken instead of guessing from a screenshot.
-const shortcutState = { assist: false, say: false, leetcode: false, clear: false, hide: false, quit: false, smart: false, lang: false };
+const shortcutState = { assist: false, say: false, leetcode: false, debug: false, clear: false, hide: false, quit: false, smart: false, lang: false };
 const isMac = process.platform === 'darwin';
 const isWindows = process.platform === 'win32';
 
@@ -399,7 +399,9 @@ async function runFeature(mode, userText) {
     const settings = store.getSettings();
     const llm = createLLM(settings);
     const userBubble = def.userBubble !== null ? def.userBubble : (mode === 'ask' ? userText : null);
-    const category = mode !== 'leetcode' ? detectCategory(transcript) : null;
+    // No category pill for the two impersonal modes — "Technical" over a list
+    // of line numbers is noise, and neither gets a context block to match it.
+    const category = (mode !== 'leetcode' && mode !== 'debug') ? detectCategory(transcript) : null;
     send('llm:start', { userBubble, small: !!def.small, category });
 
     if (!llm.ready) {
@@ -422,9 +424,15 @@ async function runFeature(mode, userText) {
     const contextBlock = buildInterviewContext(settingsForPrompt, mode, transcript);
     let system = def.buildSystem ? def.buildSystem(contextBlock) : (def.system || '');
     if (def.code) {
-      const dir = codeLanguageDirective(settingsForPrompt.codeLanguage);
+      // Debug reads code that already exists, so its fixes follow the language
+      // on screen rather than the composer's pinned choice — 'auto' is the
+      // directive that says to prefer what is visible.
+      const dir = codeLanguageDirective(def.inferLanguage ? 'auto' : settingsForPrompt.codeLanguage);
       if (dir) system += '\n\n' + dir;
-      system += '\n\n' + CODING_GUIDANCE;
+      // A mode may bring its own contract; CODING_GUIDANCE is only the default.
+      // The two can't be combined — it mandates exactly three parts ending on
+      // the complexity bullets with nothing after them.
+      system += '\n\n' + (def.guidance || CODING_GUIDANCE);
     }
     const built = def.build({ transcript, userText: userText || '' });
     // max_tokens is a ceiling, not a target — the model still stops when the
@@ -501,6 +509,7 @@ function registerShortcuts() {
   shortcutState.assist = globalShortcut.register('CommandOrControl+Return', () => runFeature('assist', ''));
   shortcutState.say = globalShortcut.register('CommandOrControl+Shift+Return', () => runFeature('say', ''));
   shortcutState.leetcode = globalShortcut.register('CommandOrControl+H', () => runFeature('leetcode', ''));
+  shortcutState.debug = globalShortcut.register('CommandOrControl+Shift+D', () => runFeature('debug', ''));
   shortcutState.clear = globalShortcut.register('CommandOrControl+Shift+K', () => send('shortcut:clear', {}));
   shortcutState.hide = globalShortcut.register('CommandOrControl+\\', () => send('shortcut:hide', {}));
   // Both flip a setting the renderer already owns, so they go the same way as

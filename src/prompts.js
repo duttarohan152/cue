@@ -16,7 +16,7 @@ function formatTranscript(turns, limit) {
 // When the budget is not the constraint: 250 turns is ~5.6k tokens, well under 1% of
 // the 1M window, and less than the screenshot costs. Recency is the only reason
 // to trim at all.
-const TURNS = { assist: 250, say: 250, ask: 250, followup: 300, leetcode: 250 };
+const TURNS = { assist: 250, say: 250, ask: 250, followup: 300, leetcode: 250, debug: 250 };
 
 function buildSystem(base, contextBlock) {
   if (!contextBlock) return base;
@@ -67,6 +67,25 @@ const EXPLANATION_GUIDANCE =
   'Put the direct answer in the first bullet, then the points that support it: how it works, the trade-off or difference that actually matters, and one concrete example. ' +
   'Use 3 to 6 bullets, and keep them flat — no sub-bullets. Bold the term being defined or compared so it is easy to find at a glance. ' +
   'You are the candidate, speaking in first person. The candidate is reading this off a screen and saying it to an interviewer, so every bullet has to stand on its own and be speakable exactly as written.';
+
+// Debug mode's own contract. Appended by main.js via `def.guidance` INSTEAD of
+// CODING_GUIDANCE — the two cannot coexist, because CODING_GUIDANCE mandates
+// exactly three parts ending on the complexity bullets with nothing after them,
+// and a debug answer is a different shape entirely.
+const DEBUG_GUIDANCE =
+  'DEBUG ANSWERS: You are reading code that already exists on screen. Answer as the candidate, in first person where it reads naturally. No preamble and no restating the problem — go straight to what is wrong.\n\n' +
+
+  '1. THE BUGS come first, always. One markdown bullet per bug, starting with "- ", ONE bug per line. Never write this as a paragraph and never put two bugs on one line. Each bullet gives, in this order, the exact line number in bold, what is wrong, and the fix:\n' +
+  '- **Line 42** — `i <= n` reads one past the end of the array. Fix: change the bound to `i < n`.\n' +
+  'Quote the offending expression in backticks so it can be found on screen at a glance. Order by severity: anything that crashes or produces wrong output comes before style. If a line number is genuinely not readable in the screenshot, write "Line not visible" instead of guessing — a confident wrong line number is worse than none, because it sends the candidate to the wrong place in front of the interviewer.\n\n' +
+
+  '2. THE CORRECTED CODE, only when the fixes would be awkward to apply from the bullets alone. One fenced block, in the SAME language as the code on screen. Show only the function or region that changed, never the whole file.\n\n' +
+
+  '3. OPTIMISATIONS last, and clearly separate, under a "## Optimisations" heading. Same one-bullet-per-line shape, with line numbers. These are improvements to code that already works — never mix them in among the bugs, and never let one push a real bug further down the answer.\n\n' +
+
+  'ONE EXCEPTION: if the interviewer has explicitly asked about performance, efficiency, complexity or optimisation, invert the order — lead with the optimisations under a "## Optimisations" heading, then give the correctness bugs after under a "## Bugs" heading. Only invert when they actually asked for it; "fix this" or "make it work" is not a request to optimise.\n\n' +
+
+  'If the code has no real bugs, say so in one line and move to the optimisations. Never invent a bug to have something to report.';
 
 const MODES = {
 
@@ -224,7 +243,43 @@ const MODES = {
       return (t ? 'Conversation so far (the interviewer may have added constraints out loud):\n' + t + '\n\n' : '') +
         'Solve the coding problem shown in the screenshot.';
     }
+  },
+
+  // ── Debug: find and fix bugs in code already on screen ────────────────────
+  debug: {
+    needsScreen: true,
+    userBubble: 'Debug what\'s on screen',
+    small: false,
+    resumeMode: 'debug',
+    // `code` for the large output budget — a multi-bug answer plus corrected
+    // code plus optimisations is long, and thinking shares that budget.
+    code: true,
+    // The buggy code decides the language, not the composer dropdown: a pinned
+    // C++ would otherwise have fixes written in the wrong language for a Python
+    // snippet. main.js passes 'auto', whose directive prefers what is on screen.
+    inferLanguage: true,
+    // Replaces CODING_GUIDANCE, which mandates an incompatible shape.
+    guidance: DEBUG_GUIDANCE,
+    // No skipHistory: debugging is iterative, and "now fix that one too" has to
+    // land on the answer cue already gave rather than starting over.
+    buildSystem(_contextBlock) {
+      // Context block intentionally ignored — interview-context.js returns null
+      // for this mode. Reading someone else's buggy code has nothing to do with
+      // the candidate's résumé, and including it only pulls the answer toward
+      // personal framing.
+      return 'You are the candidate in a live technical interview, debugging code the interviewer has put in front of you. ' +
+        'Read all of the code on screen carefully before deciding anything is wrong with it. ' +
+        'The conversation may carry hints or constraints the interviewer said out loud that are not written on screen — follow those, and prefer them over what the code alone suggests. ' +
+        'Follow the DEBUG ANSWERS structure below exactly.';
+    },
+    build(ctx) {
+      // The transcript is what reveals whether optimisation was actually asked
+      // for, which is the one thing that reorders the whole answer.
+      const t = formatTranscript(ctx.transcript, TURNS.debug);
+      return (t ? 'Conversation so far (the interviewer may have said what to focus on, or asked for optimisation):\n' + t + '\n\n' : '') +
+        'Find the bugs in the code shown in the screenshot and give the fix for each.';
+    }
   }
 };
 
-module.exports = { MODES, formatTranscript, codeLanguageDirective, CODING_GUIDANCE, EXPLANATION_GUIDANCE };
+module.exports = { MODES, formatTranscript, codeLanguageDirective, CODING_GUIDANCE, EXPLANATION_GUIDANCE, DEBUG_GUIDANCE };

@@ -164,6 +164,7 @@ Effective limit = `min(requested, provider max)`. This is an **output** cap only
 | `say` | `⌘⇧↵` / **What to say** | ❌ | last 250 | ✅ | ❌ |
 | `ask` | type + `↵` | ✅ | last 250 | ✅ | ✅ |
 | `leetcode` | `⌘H` / **Solve** | ✅ | last 250 | ❌ *(deliberately)* | ✅ |
+| `debug` | `⌘⇧D` / **Debug** | ✅ | last 250 | ❌ *(deliberately)* | ✅ *(own guidance)* |
 | `followup` | *(no UI button)* | ❌ | last 300 | ✅ | ❌ |
 | `recap` | *(no UI button)* | ❌ | full | ✅ | ❌ |
 
@@ -173,6 +174,7 @@ Effective limit = `min(requested, provider max)`. This is an **output** cap only
 - `BASE_RULES` — "Always respond in clear, natural English. Never switch to Hindi…".
 - `CODING_GUIDANCE` — appended to `code` modes. Three parts, no headings: first-person thinking-out-loud as `- ` bullets one per line, then simple hand-written-looking code with no clever one-liners, then exactly two bullets `- **T(n) = O(…)**` / `- **S(n) = O(…)**`.
 - `EXPLANATION_GUIDANCE` — the counterpart for technical answers that explain rather than code. Embedded in `assist` and `ask` (not appended by `main.js`, and deliberately not in `leetcode`). Crisp `- ` bullets, one per line, flat — **no sub-bullets**, because the renderer draws an indented bullet at the same level as a top-level one.
+- `DEBUG_GUIDANCE` — used by `debug` **instead of** `CODING_GUIDANCE`, via `def.guidance`. The two cannot coexist: `CODING_GUIDANCE` mandates exactly three parts ending on the complexity bullets with "nothing at all after them". Shape: one `- ` bullet per bug carrying **bold line number → fault → fix**, severity-ordered, `"Line not visible"` rather than a guessed number; corrected code only when the bullets are awkward to apply; `## Optimisations` last and never mixed in with the bugs — *unless* the interviewer explicitly asked about performance, which inverts the two sections.
 - Both blocks are scoped by wording — "When your response includes a code solution" vs "When your answer explains rather than solves" — so the two can coexist in one prompt without fighting.
 - `codeLanguageDirective(codeLanguage)` — pins the solution language from the composer dropdown (`c` | `cpp`); `auto` (or any unknown value, e.g. a retired `python`/`bash` choice) tells the model to infer from the screenshot/conversation and fall back to **C++**.
 
@@ -252,7 +254,9 @@ Several things look like bugs but are deliberate. **Do not "clean these up".**
 **Toolbar:** drag pill · logo (reopens onboarding) · Hide · Close · Stop/▢ (start-stop listening) · live dot · STT status.
 
 **Action row** (`data-mode` drives `runMode`):
-`What to say` (`say`) · `Assist` (`assist`) · `Solve` (`leetcode`) · `Transcript` (toggle) · `Clear`
+`What to say` (`say`) · `Assist` (`assist`) · `Solve` (`leetcode`) · `Debug` (`debug`) · `Transcript` (toggle) · `Clear`
+
+> The row is `flex-wrap: nowrap` and close to the panel width. The decorative `•` separators were removed to fit **Debug** — adding a seventh item will need space found somewhere else.
 
 > Only `.act[data-mode]` elements are wired to `runMode` — `Transcript`/`Clear` have no `data-mode` deliberately, because calling `runMode(undefined)` would latch `busy` forever.
 
@@ -270,6 +274,7 @@ On the Keys tab, the **API-keys group and the Bedrock group swap based on the se
 | Assist | `⌘↵` | `Ctrl+↵` | global |
 | What to say | `⌘⇧↵` | `Ctrl+Shift+↵` | global |
 | Solve (leetcode) | `⌘H` | `Ctrl+H` | global |
+| Debug | `⌘⇧D` | `Ctrl+Shift+D` | global |
 | Clear transcript | `⌘⇧K` | `Ctrl+Shift+K` | global → `shortcut:clear` |
 | Hide / collapse | `⌘\` | `Ctrl+\` | global → `shortcut:hide` |
 | Toggle Smart/Fast | `⌘⇧M` | `Ctrl+Shift+M` | global → `shortcut:smart` |
@@ -329,7 +334,11 @@ npm test
 
 - **Adding an IPC channel?** Register it in `main.js` *and* add it to the allow-list array in `preload.js` — otherwise `cue.on(...)` silently ignores it.
 - **Adding a setting?** Add it to `DEFAULTS` in `store.js` (deep-merge handles migration), then fill it in `fillSettings()` and read it in `saveSettings()`.
-- **Adding a mode?** Add to `MODES` with `needsScreen` / `small` / `code` / `userBubble` / `build` / `buildSystem`; set `code: true` to get the language directive, `CODING_GUIDANCE`, and the large token budget. Set `skipHistory: true` if the mode must not see cue's earlier answers (only `leetcode` does).
+- **Adding a mode?** Add to `MODES` with `needsScreen` / `small` / `code` / `userBubble` / `build` / `buildSystem`; set `code: true` to get the language directive, `CODING_GUIDANCE`, and the large token budget. Optional flags:
+  - `skipHistory: true` — the mode never sees cue's earlier answers (only `leetcode`). It still *contributes* its own.
+  - `guidance: BLOCK` — appended in place of `CODING_GUIDANCE` (only `debug`). Use when the mode's output shape is incompatible with the three-part coding contract.
+  - `inferLanguage: true` — `main.js` passes `'auto'` to `codeLanguageDirective` instead of the composer's pinned choice (only `debug`), because the mode reads code that already exists and its fixes must match what is on screen.
+- **Excluding a mode from profile context?** It's a hardcoded check at the top of `buildInterviewContext()` in `src/interview-context.js` (`leetcode`, `debug`), and a matching one on the `category` pill in `runFeature`. Both need updating together, or the UI shows a category the prompt has no context for.
 - **Don't edit `vendor/app-link/`** — it's vendored from `publik`.
 - Comments in this repo explain *why*, not *what*. Match that style; keep them to a line where possible.
 - The codebase deliberately **avoids native modules** so `npm install` stays clean (hence the JSON settings store instead of `electron-store`).

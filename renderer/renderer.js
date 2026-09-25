@@ -15,6 +15,8 @@
   document.querySelector('.act[data-mode="say"] .ic').innerHTML = icon('wand-sparkles', { size: 16 });
   const leetcodeIC = document.querySelector('.act[data-mode="leetcode"] .ic');
   if (leetcodeIC) leetcodeIC.innerHTML = icon('code', { size: 16 });
+  const debugIC = document.querySelector('.act[data-mode="debug"] .ic');
+  if (debugIC) debugIC.innerHTML = icon('bug', { size: 16 });
   $('#smart-toggle .ic').innerHTML = icon('zap', { size: 14 });
   $('#more-btn').innerHTML = icon('more-horizontal', { size: 18 });
   $('#send-btn').innerHTML = icon('play', { size: 15 });
@@ -1060,6 +1062,7 @@
     appendShortcut('.act[data-mode="say"]', isWindows ? 'Ctrl+Shift+↵' : '⌘⇧↵');
     appendShortcut('.act[data-mode="assist"]', isWindows ? 'Ctrl+↵' : '⌘↵');
     appendShortcut('.act[data-mode="leetcode"]', isWindows ? 'Ctrl+H' : '⌘H');
+    appendShortcut('.act[data-mode="debug"]', isWindows ? 'Ctrl+Shift+D' : '⌘⇧D');
     appendShortcut('#clear-transcript-btn', isWindows ? 'Ctrl+Shift+K' : '⌘⇧K');
     appendShortcut('#close-btn', isWindows ? 'Ctrl+Shift+X' : '⌘⇧X');
     appendShortcut('#hide-btn', isWindows ? 'Ctrl+\\' : '⌘\\');

@@ -33,21 +33,20 @@
           <div id="transcript-list" class="transcript-list"></div>
         </div>
 
+        <!-- The row is nowrap and close to the panel width, so the decorative
+             "•" separators were dropped to make room for Debug. -->
         <div id="action-row">
           <button class="act act-primary" data-mode="say"
             data-tip="Suggests what to say next based on the conversation">
             <span class="ic"></span><span>What to say</span>
           </button>
-          <span class="sep">•</span>
           <button class="act act-secondary" data-mode="assist"
             data-tip="Scans your screen and conversation to decide what you need">
             <span class="ic"></span><span>Assist</span>
           </button>
-          <span class="sep">•</span>
           <button class="act" data-mode="leetcode" data-tip="Solves the coding problem shown on screen"><span class="ic"></span><span>Solve</span></button>
-          <span class="sep">•</span>
+          <button class="act" data-mode="debug" data-tip="Finds bugs in the code on screen, with line numbers and fixes"><span class="ic"></span><span>Debug</span></button>
           <button class="act" id="transcript-toggle-btn" data-tip="Show/hide what was heard"><span class="ic"></span><span>Transcript</span></button>
-          <span class="sep">•</span>
           <button class="act act-clear" id="clear-transcript-btn" data-tip="Clear transcript and start fresh"><span class="ic"></span><span>Clear</span></button>
         </div>
 
