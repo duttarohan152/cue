@@ -950,8 +950,30 @@
   function syncWindowFocusable() {
     setWindowFocusable(wantsKeyboard(document.activeElement) || !!document.querySelector(OPEN_MODAL_SEL));
   }
+  // Ends text entry and hands the keyboard back. Nothing else clears the field:
+  // losing the window doesn't clear document.activeElement, so the textarea
+  // stayed "focused" inside the page indefinitely. The window was therefore
+  // still focusable, and the next click anywhere on cue let it take key status
+  // and restore the caret — pulling focus off whatever the user had just gone
+  // back to, for a click that never touched the text box.
+  function releaseKeyboard() {
+    // A dialog is a deliberate "I am configuring this" mode and the user is
+    // coming back to its fields, so leave those alone.
+    if (document.querySelector(OPEN_MODAL_SEL)) return;
+    const active = document.activeElement;
+    if (wantsKeyboard(active)) active.blur();
+    syncWindowFocusable();
+  }
+
   // Ahead of the click, so the caret appears on the first press, not the second.
-  document.addEventListener('mousedown', (e) => { if (wantsKeyboard(e.target)) setWindowFocusable(true); }, true);
+  document.addEventListener('mousedown', (e) => {
+    if (wantsKeyboard(e.target)) { setWindowFocusable(true); return; }
+    releaseKeyboard(); // clicking any non-text part of the overlay is "done typing"
+  }, true);
+  // Leaving cue for another window is "done typing" too — and it is the case
+  // that actually bites, because the user has deliberately gone back to
+  // something else and expects the next click on cue to leave it alone.
+  window.addEventListener('blur', (e) => { if (e.target === window) releaseKeyboard(); });
   document.addEventListener('focusin', syncWindowFocusable);
   // Deferred: moving between two fields reports the old one leaving first.
   document.addEventListener('focusout', () => setTimeout(syncWindowFocusable, 0));
