@@ -167,11 +167,46 @@
     scheduleRender();
   }
 
+  // Copying is a button rather than ⌘C because the overlay is deliberately
+  // non-focusable (see the focus section further down) — it never becomes the
+  // key window, so a keystroke goes to whatever app the user actually has
+  // focused and never reaches cue. A click needs no focus at all.
+  function copyButton(label, getText) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'copy-btn';
+    b.textContent = label;
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      cue.copyText(getText());
+      b.textContent = 'Copied';
+      b.classList.add('done');
+      setTimeout(() => { b.textContent = label; b.classList.remove('done'); }, 1200);
+    });
+    return b;
+  }
+
+  function addCopyButtons(el, raw) {
+    el.querySelectorAll('pre').forEach((pre) => {
+      // Wrapped rather than positioned inside the <pre>: that one scrolls
+      // horizontally, and the button would slide away with the code.
+      const wrap = document.createElement('div');
+      wrap.className = 'code-wrap';
+      pre.parentNode.insertBefore(wrap, pre);
+      wrap.appendChild(pre);
+      wrap.appendChild(copyButton('Copy', () => pre.textContent));
+    });
+    const all = copyButton('Copy answer', () => raw);
+    all.classList.add('copy-all');
+    el.appendChild(all);
+  }
+
   function finalizeAi() {
     if (!aiEl) return;
     clearTimeout(renderTimer); renderTimer = null;
     const raw = aiEl.dataset.raw || '';
     aiEl.innerHTML = renderMarkdown(raw); // drops the caret with it
+    addCopyButtons(aiEl, raw);
     aiEl = null; caretEl = null;
   }
 

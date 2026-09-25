@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, globalShortcut, screen, session, desktopCapturer, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, globalShortcut, screen, session, desktopCapturer, shell, clipboard } = require('electron');
 const path = require('path');
 const os = require('os');
 const store = require('./src/store');
@@ -500,6 +500,10 @@ ipcMain.on('window:focusable', (_e, focusable) => {
 });
 ipcMain.on('open-pane', (_e, url) => { shell.openExternal(url).catch(() => {}); });
 ipcMain.on('log', (_e, msg) => console.log('[renderer]', msg));
+// Copying has to come from a click rather than ⌘C. The overlay is deliberately
+// non-focusable so it can't pull focus off the window behind it, which also
+// means keystrokes go to whatever app IS focused and never reach cue.
+ipcMain.on('clipboard:write', (_e, text) => clipboard.writeText(String(text == null ? '' : text)));
 ipcMain.on('app:quit', () => app.quit());
 ipcMain.handle('applink:state', () => appLinkConsentState());
 ipcMain.handle('applink:revoke', (_e, callerId) => revokeAppLinkCaller(callerId));
