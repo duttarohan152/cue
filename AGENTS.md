@@ -161,10 +161,11 @@ Effective limit = `min(requested, provider max)`. This is an **output** cap only
 | Mode | Trigger | Screen | Transcript | Personal ctx | `code` |
 |---|---|---|---|---|---|
 | `assist` | `⌘↵` / **Assist** | ✅ | last 250 | ✅ | ✅ |
-| `say` | `⌘⇧↵` / **What to say** | ❌ | last 250 | ✅ | ❌ |
+| `say` | `⌘⇧↵` / **Answer** | ❌ | last 250 | ✅ | ❌ |
 | `ask` | type + `↵` | ✅ | last 250 | ✅ | ✅ |
 | `leetcode` | `⌘H` / **Solve** | ✅ | last 250 | ❌ *(deliberately)* | ✅ |
 | `debug` | `⌘⇧D` / **Debug** | ✅ | last 250 | ❌ *(deliberately)* | ✅ *(own guidance)* |
+| `design` | `⌘⇧A` / **Design** | ✅ | last 250 | ❌ *(deliberately)* | ✅ *(two phases)* |
 | `followup` | *(no UI button)* | ❌ | last 300 | ✅ | ❌ |
 | `recap` | *(no UI button)* | ❌ | full | ✅ | ❌ |
 
@@ -174,6 +175,10 @@ Effective limit = `min(requested, provider max)`. This is an **output** cap only
 - `BASE_RULES` — "Always respond in clear, natural English. Never switch to Hindi…".
 - `CODING_GUIDANCE` — appended to `code` modes. Three parts, no headings: first-person thinking-out-loud as `- ` bullets one per line, then simple hand-written-looking code with no clever one-liners, then exactly two bullets `- **T(n) = O(…)**` / `- **S(n) = O(…)**`.
 - `EXPLANATION_GUIDANCE` — the counterpart for technical answers that explain rather than code. Embedded in `assist` and `ask` (not appended by `main.js`, and deliberately not in `leetcode`). Crisp `- ` bullets, one per line, flat — **no sub-bullets**, because the renderer draws an indented bullet at the same level as a top-level one.
+- `HLD_GUIDANCE` / `LLD_GUIDANCE` — the two phases of `design`, each swapped in for `CODING_GUIDANCE` via `phase.guidance`. Both open by deciding **distributed vs in-process** scope, since "design a rate limiter" and "design a thread pool" want unrecognisably different answers. HLD: requirements, scale math, **a mandatory ASCII diagram**, components, data flow, decisions-with-tradeoffs, bottleneck and failure — and explicitly no code. LLD: real type definitions, data-structure choices, concurrency (locks, memory ordering), memory ownership, the critical function implemented, errors and edge cases, complexity.
+  > ⚠️ The ASCII diagram **must** be in a fenced block, and that is a renderer constraint, not a style preference: `renderMarkdown` only preserves whitespace inside `inCode`. Anywhere else it becomes `<p>` joined by `<br>`, HTML collapses runs of spaces, and the alignment is gone. A test pins this.
+- `HLD_GUIDANCE` / `LLD_GUIDANCE` — the two phases of `design`, each swapped in for `CODING_GUIDANCE` via `phase.guidance`. Both open by deciding **distributed vs in-process** scope, because "design a rate limiter" and "design a thread pool" want unrecognisably different answers. HLD: requirements, scale math, **a mandatory ASCII diagram**, components, data flow, decisions-with-tradeoffs, bottleneck and failure — and explicitly *no* code. LLD: real type definitions, data-structure choices, concurrency (which lock, which memory ordering), memory ownership, the critical function implemented, errors/edge cases, complexity.
+  > ⚠️ The ASCII diagram **must** sit in a fenced block, and that is a renderer constraint rather than a style preference: `renderMarkdown` preserves whitespace only inside `inCode`. Anywhere else it becomes `<p>` joined by `<br>`, HTML collapses runs of spaces, and the alignment is gone. A test pins this.
 - `DEBUG_GUIDANCE` — used by `debug` **instead of** `CODING_GUIDANCE`, via `def.guidance`. The two cannot coexist: `CODING_GUIDANCE` mandates exactly three parts ending on the complexity bullets with "nothing at all after them". Shape: one `- ` bullet per bug carrying **bold line number → fault → fix**, severity-ordered, `"Line not visible"` rather than a guessed number; corrected code only when the bullets are awkward to apply; `## Optimisations` last and never mixed in with the bugs — *unless* the interviewer explicitly asked about performance, which inverts the two sections.
 - Both blocks are scoped by wording — "When your response includes a code solution" vs "When your answer explains rather than solves" — so the two can coexist in one prompt without fighting.
 - `codeLanguageDirective(codeLanguage)` — pins the solution language from the composer dropdown (`c` | `cpp`); `auto` (or any unknown value, e.g. a retired `python`/`bash` choice) tells the model to infer from the screenshot/conversation and fall back to **C++**.
@@ -254,9 +259,9 @@ Several things look like bugs but are deliberate. **Do not "clean these up".**
 **Toolbar:** drag pill · logo (reopens onboarding) · Hide · Close · Stop/▢ (start-stop listening) · live dot · STT status.
 
 **Action row** (`data-mode` drives `runMode`):
-`What to say` (`say`) · `Assist` (`assist`) · `Solve` (`leetcode`) · `Debug` (`debug`) · `Transcript` (toggle) · `Clear`
+`Answer` (`say`) · `Assist` (`assist`) · `Solve` (`leetcode`) · `Debug` (`debug`) · `Design` (`design`) · `Transcript` (icon-only toggle) · `Clear`
 
-> The row is `flex-wrap: nowrap` and close to the panel width. The decorative `•` separators were removed to fit **Debug** — adding a seventh item will need space found somewhere else.
+> The row is `flex-wrap: nowrap` and close to the panel width. Space has been found twice already: the decorative `•` separators went to fit **Debug**, and **Transcript** lost its label (it is `.act-icon`, tooltip only) to fit **Design**. An eighth item needs a real rethink — an overflow menu rather than another trim.
 
 > Only `.act[data-mode]` elements are wired to `runMode` — `Transcript`/`Clear` have no `data-mode` deliberately, because calling `runMode(undefined)` would latch `busy` forever.
 
@@ -272,9 +277,10 @@ On the Keys tab, the **API-keys group and the Bedrock group swap based on the se
 | Action | macOS | Windows | Scope |
 |---|---|---|---|
 | Assist | `⌘↵` | `Ctrl+↵` | global |
-| What to say | `⌘⇧↵` | `Ctrl+Shift+↵` | global |
+| Answer (say) | `⌘⇧↵` | `Ctrl+Shift+↵` | global |
 | Solve (leetcode) | `⌘H` | `Ctrl+H` | global |
 | Debug | `⌘⇧D` | `Ctrl+Shift+D` | global |
+| Design (system design) | `⌘⇧A` | `Ctrl+Shift+A` | global |
 | Clear transcript | `⌘⇧K` | `Ctrl+Shift+K` | global → `shortcut:clear` |
 | Hide / collapse | `⌘\` | `Ctrl+\` | global → `shortcut:hide` |
 | Toggle Smart/Fast | `⌘⇧M` | `Ctrl+Shift+M` | global → `shortcut:smart` |
@@ -338,7 +344,9 @@ npm test
   - `skipHistory: true` — the mode never sees cue's earlier answers (only `leetcode`). It still *contributes* its own.
   - `guidance: BLOCK` — appended in place of `CODING_GUIDANCE` (only `debug`). Use when the mode's output shape is incompatible with the three-part coding contract.
   - `inferLanguage: true` — `main.js` passes `'auto'` to `codeLanguageDirective` instead of the composer's pinned choice (only `debug`), because the mode reads code that already exists and its fixes must match what is on screen.
-- **Excluding a mode from profile context?** It's a hardcoded check at the top of `buildInterviewContext()` in `src/interview-context.js` (`leetcode`, `debug`), and a matching one on the `category` pill in `runFeature`. Both need updating together, or the UI shows a category the prompt has no context for.
+  - `effort: 'medium'` — lowers `output_config.effort` from the API default of `high` (`debug`, `design`). See §5.
+  - `phases: [...]` — the mode runs **more than one LLM call**, each a full `llm:start` → tokens → `llm:done` cycle, so the renderer paints the first answer while the next is still generating (only `design`: HLD then LLD). A phase may carry its own `userBubble` / `buildSystem` / `build` / `guidance`, falling back to the mode's, and receives the previous phase's text as `ctx.prior`. `main.js` runs `def.phases || [def]`, so single-phase modes are untouched. The screenshot is captured **once** per run, `llm:done` carries `{ more: true }` between phases to keep the renderer busy through the gap, and the run writes **one** combined `answerHistory` entry rather than one per phase.
+- **Excluding a mode from profile context?** Add it to `NO_PROFILE_MODES` in `src/interview-context.js` — one exported set, used by `buildInterviewContext()` and by `runFeature` to suppress the `category` pill. These used to be two hardcoded lists; showing a category the prompt has no context block for was the drift waiting to happen.
 - **Don't edit `vendor/app-link/`** — it's vendored from `publik`.
 - Comments in this repo explain *why*, not *what*. Match that style; keep them to a line where possible.
 - The codebase deliberately **avoids native modules** so `npm install` stays clean (hence the JSON settings store instead of `electron-store`).

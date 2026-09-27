@@ -17,6 +17,8 @@
   if (leetcodeIC) leetcodeIC.innerHTML = icon('code', { size: 16 });
   const debugIC = document.querySelector('.act[data-mode="debug"] .ic');
   if (debugIC) debugIC.innerHTML = icon('bug', { size: 16 });
+  const designIC = document.querySelector('.act[data-mode="design"] .ic');
+  if (designIC) designIC.innerHTML = icon('workflow', { size: 16 });
   $('#smart-toggle .ic').innerHTML = icon('zap', { size: 14 });
   $('#more-btn').innerHTML = icon('more-horizontal', { size: 18 });
   $('#send-btn').innerHTML = icon('play', { size: 15 });
@@ -730,7 +732,10 @@
     setBusy(true);
   });
   cue.on('llm:token', ({ text }) => { stopThinking(); appendToken(text); });
-  cue.on('llm:done', () => { stopThinking(); finalizeAi(); setBusy(false); });
+  // `more` marks the end of one phase of a multi-phase mode, not the end of the
+  // run — staying busy keeps the UI honest through the gap before the next
+  // phase's llm:start, instead of flicking to idle mid-answer.
+  cue.on('llm:done', ({ more } = {}) => { stopThinking(); finalizeAi(); if (!more) setBusy(false); });
   cue.on('llm:error', ({ message }) => {
     stopThinking();
     if (!aiEl) startAi(true);
@@ -1212,6 +1217,7 @@
     appendShortcut('.act[data-mode="assist"]', isWindows ? 'Ctrl+↵' : '⌘↵');
     appendShortcut('.act[data-mode="leetcode"]', isWindows ? 'Ctrl+H' : '⌘H');
     appendShortcut('.act[data-mode="debug"]', isWindows ? 'Ctrl+Shift+D' : '⌘⇧D');
+    appendShortcut('.act[data-mode="design"]', isWindows ? 'Ctrl+Shift+A' : '⌘⇧A');
     appendShortcut('#clear-transcript-btn', isWindows ? 'Ctrl+Shift+K' : '⌘⇧K');
     appendShortcut('#close-btn', isWindows ? 'Ctrl+Shift+X' : '⌘⇧X');
     appendShortcut('#hide-btn', isWindows ? 'Ctrl+\\' : '⌘\\');

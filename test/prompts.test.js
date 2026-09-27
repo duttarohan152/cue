@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { MODES, CODING_GUIDANCE, EXPLANATION_GUIDANCE, DEBUG_GUIDANCE, codeLanguageDirective } = require('../src/prompts');
+const { MODES, CODING_GUIDANCE, EXPLANATION_GUIDANCE, DEBUG_GUIDANCE, HLD_GUIDANCE, LLD_GUIDANCE, codeLanguageDirective } = require('../src/prompts');
 
 test('code language directive pins C and C++', () => {
   assert.match(codeLanguageDirective('c'), /write it in C\b/);
@@ -150,13 +150,13 @@ test('debug mode swaps the guidance block and infers the language', () => {
   assert.ok(!MODES.debug.skipHistory, 'debugging is iterative, it needs the history');
 });
 
-test('only debug lowers effort; every other mode keeps the API default', () => {
+test('only the heavy modes lower effort; the rest keep the API default', () => {
   // Omitting `effort` is what leaves the model at its default of `high`, so an
   // accidental value on another mode would quietly downgrade its answers.
-  assert.equal(MODES.debug.effort, 'medium');
+  // debug reads a screenshot line by line; design pays the wait twice over.
+  const LOWERED = { debug: 'medium', design: 'medium' };
   for (const [name, def] of Object.entries(MODES)) {
-    if (name === 'debug') continue;
-    assert.equal(def.effort, undefined, `${name} must not set effort`);
+    assert.equal(def.effort, LOWERED[name], `${name} effort should be ${LOWERED[name] || 'unset'}`);
   }
 });
 
@@ -167,6 +167,75 @@ test('debug mode ignores personal context but carries the conversation', () => {
   const built = MODES.debug.build({ transcript, userText: '' });
   assert.match(built, /memory leak/);
   assert.match(built, /code shown in the screenshot/);
+});
+
+test('HLD requires the ASCII diagram inside a fenced block', () => {
+  // Load-bearing, not cosmetic: renderMarkdown only preserves whitespace inside
+  // a fence. Anywhere else the diagram is folded into <p> joined by <br>, where
+  // HTML collapses runs of spaces and the alignment is destroyed.
+  assert.match(HLD_GUIDANCE, /MANDATORY/);
+  assert.match(HLD_GUIDANCE, /fenced code block/i);
+  assert.match(HLD_GUIDANCE, /alignment will be destroyed/i);
+  assert.match(HLD_GUIDANCE, /72 columns/);
+  assert.match(HLD_GUIDANCE, /no Unicode box-drawing/i);
+});
+
+test('HLD covers both distributed and in-process design', () => {
+  assert.match(HLD_GUIDANCE, /DISTRIBUTED/);
+  assert.match(HLD_GUIDANCE, /IN-PROCESS/);
+  // The failure mode worth guarding: reaching for web-scale machinery when the
+  // answer is a data structure and a threading model.
+  assert.match(HLD_GUIDANCE, /do not reach for load balancers/i);
+  assert.match(HLD_GUIDANCE, /one point per line/i);
+});
+
+test('HLD stays out of the LLD\'s territory', () => {
+  assert.match(HLD_GUIDANCE, /Do NOT write any class definitions/i);
+});
+
+test('LLD is concrete about C\\/C++ specifics', () => {
+  for (const re of [/memory ordering/i, /acquire\/release\/relaxed/, /lock-free/i, /RAII/, /ownership/i, /thread-safe/i]) {
+    assert.match(LLD_GUIDANCE, re, `LLD_GUIDANCE should mention ${re}`);
+  }
+  assert.match(LLD_GUIDANCE, /one point per line/i);
+});
+
+test('LLD builds on the HLD instead of redesigning it', () => {
+  assert.match(LLD_GUIDANCE, /keep the same component names/i);
+  assert.match(LLD_GUIDANCE, /do not redesign it/i);
+});
+
+test('design mode runs as two phases with their own contracts', () => {
+  const { phases } = MODES.design;
+  assert.equal(phases.length, 2);
+  assert.equal(phases[0].guidance, HLD_GUIDANCE);
+  assert.equal(phases[1].guidance, LLD_GUIDANCE);
+  for (const p of phases) {
+    assert.equal(typeof p.build, 'function');
+    assert.equal(typeof p.buildSystem, 'function');
+    assert.ok(p.userBubble, 'each phase needs its own bubble to be told apart');
+  }
+});
+
+test('the LLD phase is handed the HLD text', () => {
+  const built = MODES.design.phases[1].build({ transcript: [], userText: '', prior: 'HLD_FROM_PHASE_ONE' });
+  assert.match(built, /HLD_FROM_PHASE_ONE/);
+  // Without it the phase would silently redesign from the question again.
+  const orphan = MODES.design.phases[1].build({ transcript: [], userText: '', prior: '' });
+  assert.match(orphan, /not available/i);
+});
+
+test('design carries the conversation and ignores personal context', () => {
+  const transcript = [{ channel: 'them', text: 'Assume 50k requests per second.', ts: Date.now() }];
+  assert.match(MODES.design.phases[0].build({ transcript, userText: '' }), /50k requests per second/);
+  assert.ok(!MODES.design.phases[0].buildSystem('IGNORED_CONTEXT').includes('IGNORED_CONTEXT'));
+});
+
+test('only design declares phases, so every other mode keeps the single-call path', () => {
+  for (const [name, def] of Object.entries(MODES)) {
+    if (name === 'design') continue;
+    assert.equal(def.phases, undefined, `${name} must not declare phases`);
+  }
 });
 
 test('followup mode returns a bullet list', () => {

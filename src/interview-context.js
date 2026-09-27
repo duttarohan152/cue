@@ -164,14 +164,21 @@ function buildJDBlock(jd, limit = 600) {
 
 // ── Main export ───────────────────────────────────────────────────────────────
 
+// Modes that get no résumé/JD block: solving a puzzle, reading someone else's
+// buggy code and designing a system are all impersonal work, and the profile is
+// ~2,300 tokens that only pulls the answer toward personal framing. Exported so
+// main.js can suppress the category pill from the same list — showing a
+// "Technical" pill for a prompt with no context block behind it was the drift
+// waiting to happen when these were two hardcoded lists.
+const NO_PROFILE_MODES = new Set(['leetcode', 'debug', 'design']);
+
 /**
  * buildInterviewContext(settings, mode, transcript)
  * Returns a system-prompt string with only the context fields relevant to
  * the detected interview category. Returns null for leetcode mode.
  */
 function buildInterviewContext(settings, mode, transcript) {
-  // Coding problems and someone else's buggy code never need personal context
-  if (mode === 'leetcode' || mode === 'debug') return null;
+  if (NO_PROFILE_MODES.has(mode)) return null;
 
   const category = detectCategory(transcript || []);
 
@@ -283,4 +290,4 @@ function buildResumeContext(resumeText, jobDescription, mode) {
   return parts.join('\n\n');
 }
 
-module.exports = { buildInterviewContext, buildResumeContext, detectCategory, parseResume };
+module.exports = { buildInterviewContext, buildResumeContext, detectCategory, parseResume, NO_PROFILE_MODES };

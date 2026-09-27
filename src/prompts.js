@@ -16,7 +16,7 @@ function formatTranscript(turns, limit) {
 // When the budget is not the constraint: 250 turns is ~5.6k tokens, well under 1% of
 // the 1M window, and less than the screenshot costs. Recency is the only reason
 // to trim at all.
-const TURNS = { assist: 250, say: 250, ask: 250, followup: 300, leetcode: 250, debug: 250 };
+const TURNS = { assist: 250, say: 250, ask: 250, followup: 300, leetcode: 250, debug: 250, design: 250 };
 
 function buildSystem(base, contextBlock) {
   if (!contextBlock) return base;
@@ -86,6 +86,61 @@ const DEBUG_GUIDANCE =
   'ONE EXCEPTION: if the interviewer has explicitly asked about performance, efficiency, complexity or optimisation, invert the order — lead with the optimisations under a "## Optimisations" heading, then give the correctness bugs after under a "## Bugs" heading. Only invert when they actually asked for it; "fix this" or "make it work" is not a request to optimise.\n\n' +
 
   'If the code has no real bugs, say so in one line and move to the optimisations. Never invent a bug to have something to report.';
+
+// ── System design: two phases, two contracts ─────────────────────────────────
+// Split because a full HLD+LLD is minutes of generation, and the candidate
+// needs something to talk about immediately. Each is appended in place of
+// CODING_GUIDANCE for its own phase.
+
+// Shared framing: the same question can mean a distributed system or a single
+// in-process component, and the answer is unrecognisable between the two.
+const DESIGN_SCOPE =
+  'FIRST, DECIDE THE SCOPE from the question and the conversation, and say which you are doing in one line:\n' +
+  '• DISTRIBUTED — a service or multi-machine system ("design a rate limiter", "design a feed"). Think in services, partitioning, replication, consistency, caching tiers, queues.\n' +
+  '• IN-PROCESS — a component inside one binary ("design a thread pool", "design an allocator", "design a lock-free queue", "design a logging library"). Think in threads, memory ownership, synchronisation, cache behaviour, syscalls, IPC.\n' +
+  'Many questions are in-process; do not reach for load balancers and shards when the answer is a data structure and a threading model. If the question genuinely spans both, lead with the distributed shape and treat the hot component as in-process.';
+
+const HLD_GUIDANCE =
+  'HIGH-LEVEL DESIGN: You are the candidate at the whiteboard in a systems interview. You work in C/C++, so the answer is expected to be concrete about memory, threads and syscalls, not hand-waving about boxes. Answer in first person. No preamble.\n\n' +
+
+  DESIGN_SCOPE + '\n\n' +
+
+  'Then give these parts, in this order, each as markdown bullets starting with "- ", ONE point per line, one short sentence each. Never write a paragraph.\n\n' +
+
+  '1. REQUIREMENTS — what it must do, and the non-functional targets that actually shape the design: throughput, latency (state a budget, e.g. p99 under 1 ms), data volume, concurrency, durability. State the assumptions you are making rather than asking questions you cannot get answered.\n\n' +
+
+  '2. SCALE MATH — a few back-of-envelope numbers that justify a decision later: requests per second, bytes per entry times entries, memory footprint, bandwidth. Show the arithmetic inline, e.g. "10k rps x 200 B = 2 MB/s".\n\n' +
+
+  '3. THE DIAGRAM — MANDATORY. An ASCII block diagram of the system, showing every component and the direction of data flow between them. Put it in a fenced code block on its own; it will be rendered in a monospace block and the alignment will be destroyed anywhere else, so this is not optional. Use only plain ASCII: + - | and > v ^ < for arrows, no Unicode box-drawing characters. Keep it under 72 columns wide so it does not need sideways scrolling. Label every box and every arrow.\n\n' +
+
+  '4. COMPONENTS — one bullet per component: what it owns, and the one thing it is responsible for.\n\n' +
+
+  '5. DATA FLOW — walk the main path end to end in order, one step per bullet. If reads and writes differ, do both.\n\n' +
+
+  '6. KEY DECISIONS — one bullet per real decision, each in the form "chose X over Y because Z". For DISTRIBUTED cover partitioning, replication, consistency, caching and back-pressure. For IN-PROCESS cover the threading model, memory ownership and allocation strategy, the synchronisation choice (mutex vs lock-free vs sharded, and why), buffering and zero-copy, and cache-line behaviour where it matters.\n\n' +
+
+  '7. BOTTLENECK AND FAILURE — the single component that breaks first under load and what you would do about it, then what happens when each dependency fails.\n\n' +
+
+  'Do NOT write any class definitions, method signatures or implementation code here — that is the next answer. Stay at the level of components and decisions.';
+
+const LLD_GUIDANCE =
+  'LOW-LEVEL DESIGN: You are the same candidate, now asked to make the design concrete. The high-level design you already gave is included above — build on it and keep the same component names; do not redesign it or repeat its diagram. Answer in first person. No preamble.\n\n' +
+
+  'Give these parts, in this order. Prose parts are markdown bullets starting with "- ", ONE point per line, one short sentence each.\n\n' +
+
+  '1. THE TYPES — the classes and structs that matter, as real code in a fenced block. Show the data members with their types, the public method signatures, and what each member owns. Mark what is const, what is atomic, what is aligned. Do not write the method bodies unless a body is the interesting part.\n\n' +
+
+  '2. DATA STRUCTURES — one bullet per choice: the structure, where it is used, and why it beats the obvious alternative. Be specific about layout when it matters (intrusive list to avoid an allocation per node, open addressing for cache locality, ring buffer to avoid reallocation).\n\n' +
+
+  '3. CONCURRENCY — the threading model in concrete terms: which threads exist, what each one owns, which lock protects what, where the critical sections are and how long they are held. Name the memory ordering on any atomic (acquire/release/relaxed) and say why that one. If anything is lock-free, say what guarantees it gives. State what is and is not thread-safe.\n\n' +
+
+  '4. MEMORY — ownership for every allocation: who allocates, who frees, which smart pointer or RAII wrapper expresses it. Say what is allocated on the hot path and what you pre-allocate or pool to keep it off. Note lifetime hazards (dangling references, use-after-free windows, ABA).\n\n' +
+
+  '5. THE CRITICAL PATH — one fenced block with the single most important function implemented properly, the one the interviewer would ask you to write. Simple, readable, correct, no clever tricks.\n\n' +
+
+  '6. ERRORS AND EDGE CASES — one bullet each: failure modes, what is returned or thrown, and the edge cases (empty, full, single element, concurrent shutdown, overflow).\n\n' +
+
+  '7. COMPLEXITY — finish with the cost of the main operations, one bullet each, in the form "- **push: T(n) = O(1) amortised** — reason.". Include the memory overhead per element.';
 
 const MODES = {
 
@@ -285,7 +340,66 @@ const MODES = {
       return (t ? 'Conversation so far (the interviewer may have said what to focus on, or asked for optimisation):\n' + t + '\n\n' : '') +
         'Find the bugs in the code shown in the screenshot and give the fix for each.';
     }
+  },
+
+  // ── Design: system design, split into two streamed answers ────────────────
+  design: {
+    needsScreen: true,
+    userBubble: null,
+    small: false,
+    resumeMode: 'design',
+    // `code` for the large output budget and the language directive — the LLD
+    // phase writes real class definitions in the candidate's language.
+    code: true,
+    // Same reasoning as debug, and more so: the wait compounds across two calls,
+    // and cutting it is the entire point of splitting them.
+    effort: 'medium',
+    // Two calls rather than one. A full HLD plus LLD is minutes of generation,
+    // and the candidate has an interviewer waiting — so the high-level answer
+    // is streamed and rendered while the low-level one is still being written.
+    phases: [
+      {
+        key: 'hld',
+        userBubble: 'System design — high level',
+        guidance: HLD_GUIDANCE,
+        buildSystem(_contextBlock) {
+          // Context block ignored — see NO_PROFILE_MODES in interview-context.js.
+          return 'You are the candidate in a live system design interview, working in C/C++. ' +
+            'The question may be written on screen, spoken by the interviewer, or both. ' +
+            'Design what was actually asked for — read the conversation for the scale, constraints and targets the interviewer gave out loud, and prefer those over anything you assume. ' +
+            'Follow the HIGH-LEVEL DESIGN structure below exactly, including the mandatory ASCII diagram.';
+        },
+        build(ctx) {
+          const t = formatTranscript(ctx.transcript, TURNS.design);
+          return (t ? 'Conversation so far (the interviewer may have given scale, constraints or targets out loud):\n' + t + '\n\n' : '') +
+            (ctx.userText ? 'The system to design: ' + ctx.userText + '\n\n' : '') +
+            'Give the high-level design for the system being asked about.';
+        }
+      },
+      {
+        key: 'lld',
+        userBubble: 'System design — low level',
+        guidance: LLD_GUIDANCE,
+        buildSystem(_contextBlock) {
+          return 'You are the candidate in a live system design interview, working in C/C++, who has just presented a high-level design and been asked to make it concrete. ' +
+            'Follow the LOW-LEVEL DESIGN structure below exactly.';
+        },
+        // `prior` is the HLD this run just produced. Passing it explicitly (not
+        // via answer history) is what keeps the LLD on the same component names
+        // instead of quietly redesigning the system from the question again.
+        build(ctx) {
+          const t = formatTranscript(ctx.transcript, TURNS.design);
+          return (t ? 'Conversation so far:\n' + t + '\n\n' : '') +
+            'The high-level design you just gave:\n' + (ctx.prior || '(not available — infer it from the question on screen)') + '\n\n' +
+            'Now give the low-level design for it.';
+        }
+      }
+    ],
+    // Never reached: phases carry their own. Present so anything walking MODES
+    // and calling build/buildSystem blind still works.
+    buildSystem(contextBlock) { return this.phases[0].buildSystem(contextBlock); },
+    build(ctx) { return this.phases[0].build(ctx); }
   }
 };
 
-module.exports = { MODES, formatTranscript, codeLanguageDirective, CODING_GUIDANCE, EXPLANATION_GUIDANCE, DEBUG_GUIDANCE };
+module.exports = { MODES, formatTranscript, codeLanguageDirective, CODING_GUIDANCE, EXPLANATION_GUIDANCE, DEBUG_GUIDANCE, HLD_GUIDANCE, LLD_GUIDANCE };

@@ -9,7 +9,7 @@ const { MODES, codeLanguageDirective, CODING_GUIDANCE } = require('./src/prompts
 const { rms16 } = require('./src/wav');
 const { createStreamingSTT } = require('./src/stt-streaming');
 const { AdaptiveVAD, AudioRingBuffer } = require('./src/vad');
-const { buildInterviewContext, detectCategory } = require('./src/interview-context');
+const { buildInterviewContext, detectCategory, NO_PROFILE_MODES } = require('./src/interview-context');
 const { startAppLink, stopAppLink, recordEvent, appLinkConsentState, revokeAppLinkCaller } = require('./src/applink');
 
 let win = null;
@@ -17,7 +17,7 @@ let win = null;
 // false when another application already owns the combination, and nothing used
 // to look at that — so the only symptom was a key that did nothing. Iris reads
 // this and can say which key is taken instead of guessing from a screenshot.
-const shortcutState = { assist: false, say: false, leetcode: false, debug: false, clear: false, hide: false, quit: false, smart: false, lang: false };
+const shortcutState = { assist: false, say: false, leetcode: false, debug: false, design: false, clear: false, hide: false, quit: false, smart: false, lang: false };
 const isMac = process.platform === 'darwin';
 const isWindows = process.platform === 'win32';
 
@@ -426,17 +426,18 @@ async function runFeature(mode, userText) {
   try {
     const settings = store.getSettings();
     const llm = createLLM(settings);
-    const userBubble = def.userBubble !== null ? def.userBubble : (mode === 'ask' ? userText : null);
-    // No category pill for the two impersonal modes — "Technical" over a list
-    // of line numbers is noise, and neither gets a context block to match it.
-    const category = (mode !== 'leetcode' && mode !== 'debug') ? detectCategory(transcript) : null;
-    send('llm:start', { userBubble, small: !!def.small, category });
+    // No category pill for the impersonal modes — "Technical" over a list of
+    // line numbers is noise, and none of them gets a context block to match it.
+    const category = NO_PROFILE_MODES.has(mode) ? null : detectCategory(transcript);
 
     if (!llm.ready) {
+      send('llm:start', { userBubble: null, small: !!def.small, category });
       send('llm:error', { message: 'Add your ' + settings.provider + ' API key in Settings (gear icon) to start. Model: ' + (llm.model || 'unset') + '.' });
       return;
     }
 
+    // Captured once and reused across phases: a second capture would cost
+    // another ~500ms for a screen that hasn't changed.
     let imageDataUrl = null;
     if (def.needsScreen) {
       try { imageDataUrl = await captureScreenshot(); }
@@ -450,19 +451,6 @@ async function runFeature(mode, userText) {
 
     const settingsForPrompt = store.getSettings();
     const contextBlock = buildInterviewContext(settingsForPrompt, mode, transcript);
-    let system = def.buildSystem ? def.buildSystem(contextBlock) : (def.system || '');
-    if (def.code) {
-      // Debug reads code that already exists, so its fixes follow the language
-      // on screen rather than the composer's pinned choice — 'auto' is the
-      // directive that says to prefer what is visible.
-      const dir = codeLanguageDirective(def.inferLanguage ? 'auto' : settingsForPrompt.codeLanguage);
-      if (dir) system += '\n\n' + dir;
-      // A mode may bring its own contract; CODING_GUIDANCE is only the default.
-      // The two can't be combined — it mandates exactly three parts ending on
-      // the complexity bullets with nothing after them.
-      system += '\n\n' + (def.guidance || CODING_GUIDANCE);
-    }
-    const built = def.build({ transcript, userText: userText || '' });
     // max_tokens is a ceiling, not a target — the model still stops when the
     // answer is done — so these are set well clear of what an answer needs.
     // They have to be: Claude 5 counts thinking against this same budget, and
@@ -472,21 +460,60 @@ async function runFeature(mode, userText) {
     const maxTokens = def.code
       ? (settings.smart ? 64000 : 32000)
       : (settings.smart ? 32000 : 16000);
-    const answer = await llm.stream({
-      system,
-      turns: [...historyTurns(def), { role: 'user', text: built }],
-      imageDataUrl,
-      maxTokens,
-      effort: def.effort, // undefined for every mode but debug — API default is `high`
-      signal: run.controller.signal,
-      isCancelled: () => run.cancelled,
-      onToken: (t) => { if (!run.cancelled) send('llm:token', { text: t }); }
-    });
-    if (run.cancelled) return; // the user moved on; don't finish or remember it
+
+    // Most modes are a single implicit phase. A mode declaring `phases` runs
+    // them in order, each as its own start/stream/done cycle, so the renderer
+    // paints the first answer while the second is still being generated —
+    // which is the whole point for design, where waiting for both would mean
+    // staring at nothing for a minute.
+    const phases = def.phases || [def];
+    const answers = [];
+    for (let i = 0; i < phases.length; i++) {
+      if (run.cancelled) break;
+      const phase = phases[i];
+      const bubble = phase.userBubble !== undefined && phase.userBubble !== null
+        ? phase.userBubble
+        : (def.userBubble !== null ? def.userBubble : (mode === 'ask' ? userText : null));
+      send('llm:start', { userBubble: bubble, small: !!def.small, category });
+
+      let system = (phase.buildSystem || def.buildSystem)(contextBlock);
+      if (def.code) {
+        // Debug reads code that already exists, so its fixes follow the language
+        // on screen rather than the composer's pinned choice — 'auto' is the
+        // directive that says to prefer what is visible.
+        const dir = codeLanguageDirective(def.inferLanguage ? 'auto' : settingsForPrompt.codeLanguage);
+        if (dir) system += '\n\n' + dir;
+        // A phase may bring its own contract, then the mode, then the default.
+        // These can't be combined — CODING_GUIDANCE mandates exactly three parts
+        // ending on the complexity bullets with nothing after them.
+        system += '\n\n' + (phase.guidance || def.guidance || CODING_GUIDANCE);
+      }
+      // `prior` is how the second phase designs the components the first one
+      // actually named, rather than inventing its own from the question again.
+      const built = (phase.build || def.build)({ transcript, userText: userText || '', prior: answers[answers.length - 1] || '' });
+      const answer = await llm.stream({
+        system,
+        turns: [...historyTurns(def), { role: 'user', text: built }],
+        imageDataUrl,
+        maxTokens,
+        effort: def.effort, // undefined unless the mode lowers it — API default is `high`
+        signal: run.controller.signal,
+        isCancelled: () => run.cancelled,
+        onToken: (t) => { if (!run.cancelled) send('llm:token', { text: t }); }
+      });
+      if (run.cancelled) break; // the user moved on; keep what's done, run no more
+      answers.push(answer);
+      // `more` keeps the renderer busy through the gap before the next phase
+      // starts; without it the UI reads as idle mid-run.
+      send('llm:done', { more: i < phases.length - 1 });
+    }
+
+    if (run.cancelled && !answers.length) return;
+    // One entry per run, not per phase: a two-phase design would otherwise eat
+    // two of the three history slots on its own.
     // Recorded even for modes that don't read the history back (leetcode), so a
     // follow-up asked through Assist can still pick up what Solve answered.
-    rememberAnswer(mode === 'ask' && userText ? userText : (def.userBubble || 'Assist with what is on screen and being said.'), answer);
-    send('llm:done', {});
+    rememberAnswer(mode === 'ask' && userText ? userText : (def.userBubble || 'Assist with what is on screen and being said.'), answers.join('\n\n'));
   } catch (e) {
     // An abort throws here too, but that was deliberate — not something to
     // record as a failure or show the user as an error.
@@ -551,6 +578,10 @@ function registerShortcuts() {
   shortcutState.say = globalShortcut.register('CommandOrControl+Shift+Return', () => runFeature('say', ''));
   shortcutState.leetcode = globalShortcut.register('CommandOrControl+H', () => runFeature('leetcode', ''));
   shortcutState.debug = globalShortcut.register('CommandOrControl+Shift+D', () => runFeature('debug', ''));
+  // A for Architecture, not S for System: a global shortcut takes the combo from
+  // whatever app is focused, and Cmd+Shift+S is Save As nearly everywhere —
+  // pressing it and silently not saving is a worse failure than a duller key.
+  shortcutState.design = globalShortcut.register('CommandOrControl+Shift+A', () => runFeature('design', ''));
   shortcutState.clear = globalShortcut.register('CommandOrControl+Shift+K', () => send('shortcut:clear', {}));
   shortcutState.hide = globalShortcut.register('CommandOrControl+\\', () => send('shortcut:hide', {}));
   // Both flip a setting the renderer already owns, so they go the same way as

@@ -242,6 +242,8 @@ button:focus { outline: none; }
 .act:hover { color: #fff; background: rgba(255,255,255,0.06); }
 .act:active { transform: translateY(0.5px); }
 .act:disabled { opacity: 0.5; cursor: default; }
+/* Label-less button: square it up so it doesn't read as a clipped word. */
+.act-icon { padding: 5px 6px; }
 .act-primary {
   font-size: 15px; font-weight: 600; padding: 6px 12px;
   background: rgba(60,131,245,0.14); border: 1px solid rgba(60,131,245,0.30);
