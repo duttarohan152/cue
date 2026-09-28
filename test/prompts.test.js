@@ -180,24 +180,53 @@ test('HLD requires the ASCII diagram inside a fenced block', () => {
   assert.match(HLD_GUIDANCE, /no Unicode box-drawing/i);
 });
 
-test('HLD covers both distributed and in-process design', () => {
-  assert.match(HLD_GUIDANCE, /DISTRIBUTED/);
-  assert.match(HLD_GUIDANCE, /IN-PROCESS/);
+test('HLD targets low-level systems roles, not web services', () => {
+  for (const re of [/datapath/i, /kernel/i, /mid-level/i]) {
+    assert.match(HLD_GUIDANCE, re, `HLD_GUIDANCE should mention ${re}`);
+  }
   // The failure mode worth guarding: reaching for web-scale machinery when the
   // answer is a data structure and a threading model.
   assert.match(HLD_GUIDANCE, /do not reach for load balancers/i);
+  assert.match(HLD_GUIDANCE, /NOT web-service design questions/i);
   assert.match(HLD_GUIDANCE, /one point per line/i);
 });
 
-test('HLD stays out of the LLD\'s territory', () => {
-  assert.match(HLD_GUIDANCE, /Do NOT write any class definitions/i);
+test('HLD names the trade-off axes explicitly', () => {
+  // The section the interview is actually won in, so each axis is pinned.
+  for (const axis of ['CPU', 'MEMORY', 'LATENCY', 'THROUGHPUT', 'COMPLEXITY']) {
+    assert.match(HLD_GUIDANCE, new RegExp(axis), `trade-offs should name ${axis}`);
+  }
+  assert.match(HLD_GUIDANCE, /BACK-OF-ENVELOPE ESTIMATES/);
+  assert.match(HLD_GUIDANCE, /REQUIREMENTS/);
+  assert.match(HLD_GUIDANCE, /DATA FLOW DIAGRAM/);
 });
 
-test('LLD is concrete about C\\/C++ specifics', () => {
-  for (const re of [/memory ordering/i, /acquire\/release\/relaxed/, /lock-free/i, /RAII/, /ownership/i, /thread-safe/i]) {
+test('HLD stays out of the LLD\'s territory', () => {
+  assert.match(HLD_GUIDANCE, /No class definitions, function signatures or implementation code/i);
+});
+
+test('LLD asks for signatures and pseudocode, not a working implementation', () => {
+  // A mid-level candidate writing out a whole system burns the time the hard
+  // part needs, so this is the constraint most worth pinning.
+  assert.match(LLD_GUIDANCE, /MID-LEVEL INTERVIEW/);
+  assert.match(LLD_GUIDANCE, /Nobody expects a complete working implementation/i);
+  assert.match(LLD_GUIDANCE, /signatures ONLY/);
+  assert.match(LLD_GUIDANCE, /DO NOT write the bodies/);
+  assert.match(LLD_GUIDANCE, /does not have to compile/i);
+});
+
+test('LLD is concrete about the hard concurrent path', () => {
+  for (const re of [/HOT PATH/, /memory ordering/i, /acquire\/release\/relaxed/, /CAS retry loop/i, /ABA/, /critical section/i]) {
     assert.match(LLD_GUIDANCE, re, `LLD_GUIDANCE should mention ${re}`);
   }
   assert.match(LLD_GUIDANCE, /one point per line/i);
+});
+
+test('LLD ends on algorithms with Big-O for time and space', () => {
+  assert.match(LLD_GUIDANCE, /ALGORITHMS AND COMPLEXITY/);
+  assert.match(LLD_GUIDANCE, /T\(n\)/);
+  assert.match(LLD_GUIDANCE, /S\(n\)/);
+  assert.match(LLD_GUIDANCE, /write nothing after them/i);
 });
 
 test('LLD builds on the HLD instead of redesigning it', () => {

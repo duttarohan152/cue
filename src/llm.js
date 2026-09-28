@@ -16,6 +16,16 @@ function formatProviderErrorMessage(error, provider) {
     const label = normalizeProviderName(provider);
     return `${label} quota or rate-limit hit. Check your plan/billing for the API key, wait a moment, or switch to another provider in Settings.`;
   }
+  // A 5xx otherwise reached the UI as a raw JSON blob. The SDK already retried
+  // twice by the time we see one, so "try again" alone is poor advice — the
+  // useful hint is that these have shown up on one model tier and not the other
+  // for the very same request.
+  const isServerFault = (status >= 500 && status < 600) || code === 'api_error' || code === 'overloaded_error' ||
+    /internal server error|overloaded/i.test(text);
+  if (isServerFault) {
+    const label = normalizeProviderName(provider);
+    return `${label} returned a server error (${status || code || 'api_error'}) and the automatic retries also failed. Try again, or flip the Smart toggle to run the other model — the same request often succeeds on the other tier.`;
+  }
   return rawMessage || 'Unknown LLM error.';
 }
 
@@ -71,11 +81,21 @@ function buildAnthropicMessages(turns, imageDataUrl) {
 
 // The system prompt — guidance blocks plus the résumé/JD context — is identical
 // from one request to the next within a session, so marking it as a cache
-// breakpoint cuts time-to-first-token on every call after the first. Below the
-// model's minimum (1024 tokens on Sonnet 5, 512 on Opus 5) the request still
-// succeeds, it simply isn't cached, so there is nothing to guard against.
+// breakpoint cuts time-to-first-token on every call after the first.
+//
+// Only worth doing above the model's minimum cacheable prefix (1024 tokens on
+// Sonnet 5, 512 on Opus 5): below it the breakpoint caches nothing, and it is
+// the leading suspect for the repeated 500s seen on design's short LLD prompt,
+// which lands just under Sonnet's minimum while every prompt that worked sat
+// above it. The real token count isn't knowable here without a round trip, so
+// gate on characters with enough margin to clear 1024 tokens even at a
+// pessimistic 3.5 chars/token. Under the threshold we send a plain string —
+// exactly the shape used before caching existed.
+const MIN_CACHEABLE_CHARS = 4500;
+
 function buildAnthropicSystem(system, cacheTtl) {
   if (!system) return undefined;
+  if (system.length < MIN_CACHEABLE_CHARS) return system;
   const cache_control = cacheTtl ? { type: 'ephemeral', ttl: cacheTtl } : { type: 'ephemeral' };
   return [{ type: 'text', text: system, cache_control }];
 }

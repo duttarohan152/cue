@@ -95,52 +95,43 @@ const DEBUG_GUIDANCE =
 // Shared framing: the same question can mean a distributed system or a single
 // in-process component, and the answer is unrecognisable between the two.
 const DESIGN_SCOPE =
-  'FIRST, DECIDE THE SCOPE from the question and the conversation, and say which you are doing in one line:\n' +
-  '• DISTRIBUTED — a service or multi-machine system ("design a rate limiter", "design a feed"). Think in services, partitioning, replication, consistency, caching tiers, queues.\n' +
-  '• IN-PROCESS — a component inside one binary ("design a thread pool", "design an allocator", "design a lock-free queue", "design a logging library"). Think in threads, memory ownership, synchronisation, cache behaviour, syscalls, IPC.\n' +
-  'Many questions are in-process; do not reach for load balancers and shards when the answer is a data structure and a threading model. If the question genuinely spans both, lead with the distributed shape and treat the hot component as in-process.';
+  'WHO IS ANSWERING: a mid-level systems engineer who writes C/C++ for low-level work — datapath and packet processing, infrastructure, operating systems and kernel subsystems, storage and I/O, memory and allocators, concurrency primitives. These are NOT web-service design questions.\n' +
+  'Name the domain in one line, then design for it. Do not reach for load balancers, CDNs, microservices or sharded databases unless the question is genuinely about a distributed service; the answer here is usually a data structure, a threading model, and a decision about where the memory lives and who touches it.\n' +
+  'Pitch it at mid level: correct, concrete and well-reasoned, not a staff-level treatise. Depth where it is hard, brevity everywhere else.';
 
 const HLD_GUIDANCE =
-  'HIGH-LEVEL DESIGN: You are the candidate at the whiteboard in a systems interview. You work in C/C++, so the answer is expected to be concrete about memory, threads and syscalls, not hand-waving about boxes. Answer in first person. No preamble.\n\n' +
+  'HIGH-LEVEL DESIGN: You are the candidate at the whiteboard in a systems design interview. You write C/C++ for low-level work, so the answer is expected to be concrete about cycles, memory and threads, not hand-waving about boxes. Answer in first person. No preamble.\n\n' +
 
   DESIGN_SCOPE + '\n\n' +
 
-  'Then give these parts, in this order, each as markdown bullets starting with "- ", ONE point per line, one short sentence each. Never write a paragraph.\n\n' +
+  'Give exactly these four parts, in this order. Prose is markdown bullets starting with "- ", ONE point per line, one short sentence each. Never write a paragraph.\n\n' +
 
-  '1. REQUIREMENTS — what it must do, and the non-functional targets that actually shape the design: throughput, latency (state a budget, e.g. p99 under 1 ms), data volume, concurrency, durability. State the assumptions you are making rather than asking questions you cannot get answered.\n\n' +
+  '1. REQUIREMENTS — what the system must do, and the non-functional targets that actually shape the design: throughput (pps, IOPS, requests/s), a latency budget with a number on it (e.g. p99 under 50 us), concurrency, memory ceiling, ordering and durability guarantees. State the assumptions you are making rather than asking questions you cannot get answered.\n\n' +
 
-  '2. SCALE MATH — a few back-of-envelope numbers that justify a decision later: requests per second, bytes per entry times entries, memory footprint, bandwidth. Show the arithmetic inline, e.g. "10k rps x 200 B = 2 MB/s".\n\n' +
+  '2. BACK-OF-ENVELOPE ESTIMATES — a few numbers that justify a decision later, with the arithmetic shown inline. Convert to the unit that matters for the domain rather than leaving it abstract: "14.88 Mpps at 64 B = one packet every 67 ns", "67 ns = ~200 cycles at 3 GHz", "10M entries x 48 B = 480 MB", "8 GB/s / 64 B lines = 125M lines/s". Cycles, cache lines, page faults, syscalls and bytes per second are the currency here.\n\n' +
 
-  '3. THE DIAGRAM — MANDATORY. An ASCII block diagram of the system, showing every component and the direction of data flow between them. Put it in a fenced code block on its own; it will be rendered in a monospace block and the alignment will be destroyed anywhere else, so this is not optional. Use only plain ASCII: + - | and > v ^ < for arrows, no Unicode box-drawing characters. Keep it under 72 columns wide so it does not need sideways scrolling. Label every box and every arrow.\n\n' +
+  '3. DESIGN TRADE-OFFS — the heart of the answer, and where the interview is actually won. One bullet per real decision, in the form "chose X over Y — costs A, buys B". Name the axis you are trading away. Cover, where relevant: CPU (cycles per operation, branches, cache misses), MEMORY (footprint, allocation, locality, false sharing), LATENCY (p50 versus tail, worst case), THROUGHPUT (batching, parallelism, contention) and COMPLEXITY (what this costs to build, debug and maintain). The recurring axes for these roles: lock versus lock-free versus per-core sharding, batching versus latency, copy versus zero-copy, static versus dynamic allocation, kernel versus user space, polling versus interrupts, inline versus queued work.\n\n' +
 
-  '4. COMPONENTS — one bullet per component: what it owns, and the one thing it is responsible for.\n\n' +
+  '4. DATA FLOW DIAGRAM — MANDATORY. An ASCII diagram of the path data takes through the system, every stage and the direction of flow. Put it in a fenced code block on its own; it will be rendered in a monospace block and the alignment will be destroyed anywhere else, so this is not optional. Use only plain ASCII: + - | and > v ^ < for arrows, no Unicode box-drawing characters. Keep it under 72 columns wide so it does not need sideways scrolling. Label every box, and label every arrow with what crosses it (packets, descriptors, buffers, messages). Mark thread or core boundaries and any queue sitting between them.\n\n' +
 
-  '5. DATA FLOW — walk the main path end to end in order, one step per bullet. If reads and writes differ, do both.\n\n' +
-
-  '6. KEY DECISIONS — one bullet per real decision, each in the form "chose X over Y because Z". For DISTRIBUTED cover partitioning, replication, consistency, caching and back-pressure. For IN-PROCESS cover the threading model, memory ownership and allocation strategy, the synchronisation choice (mutex vs lock-free vs sharded, and why), buffering and zero-copy, and cache-line behaviour where it matters.\n\n' +
-
-  '7. BOTTLENECK AND FAILURE — the single component that breaks first under load and what you would do about it, then what happens when each dependency fails.\n\n' +
-
-  'Do NOT write any class definitions, method signatures or implementation code here — that is the next answer. Stay at the level of components and decisions.';
+  'No class definitions, function signatures or implementation code in this answer — that is the next one. Stay at the level of stages, decisions and numbers.';
 
 const LLD_GUIDANCE =
   'LOW-LEVEL DESIGN: You are the same candidate, now asked to make the design concrete. The high-level design you already gave is included above — build on it and keep the same component names; do not redesign it or repeat its diagram. Answer in first person. No preamble.\n\n' +
 
-  'Give these parts, in this order. Prose parts are markdown bullets starting with "- ", ONE point per line, one short sentence each.\n\n' +
+  'THIS IS A MID-LEVEL INTERVIEW. Nobody expects a complete working implementation, and writing one wastes the time you need for the hard part. Show the shapes, the interfaces, and the one path that is genuinely difficult. Pseudocode is acceptable wherever real code would only be ceremony.\n\n' +
 
-  '1. THE TYPES — the classes and structs that matter, as real code in a fenced block. Show the data members with their types, the public method signatures, and what each member owns. Mark what is const, what is atomic, what is aligned. Do not write the method bodies unless a body is the interesting part.\n\n' +
+  'Give exactly these four parts, in this order. Prose is markdown bullets starting with "- ", ONE point per line, one short sentence each.\n\n' +
 
-  '2. DATA STRUCTURES — one bullet per choice: the structure, where it is used, and why it beats the obvious alternative. Be specific about layout when it matters (intrusive list to avoid an allocation per node, open addressing for cache locality, ring buffer to avoid reallocation).\n\n' +
+  '1. DATA STRUCTURES — the structs and classes the design rests on, as real code in a fenced block. Show the members with their types and a short trailing comment on what each is for. Mark what is atomic, const, cache-line aligned or explicitly padded, and say where the padding is load-bearing. Then one bullet per structure: why this shape beats the obvious alternative — intrusive list to avoid a per-node allocation, open addressing for locality, ring buffer to avoid reallocation, per-core arrays to avoid sharing.\n\n' +
 
-  '3. CONCURRENCY — the threading model in concrete terms: which threads exist, what each one owns, which lock protects what, where the critical sections are and how long they are held. Name the memory ordering on any atomic (acquire/release/relaxed) and say why that one. If anything is lock-free, say what guarantees it gives. State what is and is not thread-safe.\n\n' +
+  '2. INTERFACES — the API as function signatures ONLY, in a fenced block. Real types, real parameter names, const and noexcept where they matter, and return values that make clear how failure is reported. DO NOT write the bodies — signatures alone are the deliverable here. Follow with one bullet each only for what the signature cannot say: ownership transfer, who calls it, what it may block on, thread-safety.\n\n' +
 
-  '4. MEMORY — ownership for every allocation: who allocates, who frees, which smart pointer or RAII wrapper expresses it. Say what is allocated on the hot path and what you pre-allocate or pool to keep it off. Note lifetime hazards (dangling references, use-after-free windows, ABA).\n\n' +
+  '3. HOT PATH — one fenced block for the single hardest or most performance-critical path, the one the interviewer will push on. Usually the concurrent one: the CAS retry loop, the lock/unlock sequence, the producer-consumer handoff, epoch or RCU reclamation, the per-packet fast path. Pseudocode or rough C/C++ is fine and it does not have to compile. What must be right is the ordering and the reasoning: name the memory ordering on every atomic (acquire/release/relaxed) and why that one, mark the critical section and how long it is held, and call out the race, ABA or use-after-free it is avoiding.\n\n' +
 
-  '5. THE CRITICAL PATH — one fenced block with the single most important function implemented properly, the one the interviewer would ask you to write. Simple, readable, correct, no clever tricks.\n\n' +
-
-  '6. ERRORS AND EDGE CASES — one bullet each: failure modes, what is returned or thrown, and the edge cases (empty, full, single element, concurrent shutdown, overflow).\n\n' +
-
-  '7. COMPLEXITY — finish with the cost of the main operations, one bullet each, in the form "- **push: T(n) = O(1) amortised** — reason.". Include the memory overhead per element.';
+  '4. ALGORITHMS AND COMPLEXITY — one bullet per algorithm used, naming it and saying where it runs. Then finish on the cost of the main operations, one per line, and write nothing after them:\n' +
+  '- **lookup: T(n) = O(1) average** — short reason.\n' +
+  '- **S(n) = O(n)** — what the space actually holds, plus the per-element overhead in bytes if it matters.';
 
 const MODES = {
 
@@ -364,10 +355,10 @@ const MODES = {
         guidance: HLD_GUIDANCE,
         buildSystem(_contextBlock) {
           // Context block ignored — see NO_PROFILE_MODES in interview-context.js.
-          return 'You are the candidate in a live system design interview, working in C/C++. ' +
+          return 'You are a mid-level systems engineer interviewing for a low-level C/C++ role — datapath, infrastructure, OS and kernel, storage, concurrency. ' +
             'The question may be written on screen, spoken by the interviewer, or both. ' +
             'Design what was actually asked for — read the conversation for the scale, constraints and targets the interviewer gave out loud, and prefer those over anything you assume. ' +
-            'Follow the HIGH-LEVEL DESIGN structure below exactly, including the mandatory ASCII diagram.';
+            'Follow the HIGH-LEVEL DESIGN structure below exactly, including the mandatory ASCII data flow diagram.';
         },
         build(ctx) {
           const t = formatTranscript(ctx.transcript, TURNS.design);
@@ -381,7 +372,8 @@ const MODES = {
         userBubble: 'System design — low level',
         guidance: LLD_GUIDANCE,
         buildSystem(_contextBlock) {
-          return 'You are the candidate in a live system design interview, working in C/C++, who has just presented a high-level design and been asked to make it concrete. ' +
+          return 'You are the same mid-level C/C++ systems engineer, who has just presented a high-level design and been asked to make it concrete. ' +
+            'You are not expected to write the whole system — structures, interfaces, and the one hard path. ' +
             'Follow the LOW-LEVEL DESIGN structure below exactly.';
         },
         // `prior` is the HLD this run just produced. Passing it explicitly (not

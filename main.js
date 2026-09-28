@@ -423,6 +423,10 @@ async function runFeature(mode, userText) {
   run.done = new Promise((resolve) => { settle = resolve; });
   activeRun = run;
   state.busy = true;
+  // Hoisted so a phase that fails or is cancelled doesn't discard the phases
+  // that already finished — losing a good HLD because the LLD 500'd would mean
+  // a follow-up question had no idea what was just designed.
+  const answers = [];
   try {
     const settings = store.getSettings();
     const llm = createLLM(settings);
@@ -467,7 +471,6 @@ async function runFeature(mode, userText) {
     // which is the whole point for design, where waiting for both would mean
     // staring at nothing for a minute.
     const phases = def.phases || [def];
-    const answers = [];
     for (let i = 0; i < phases.length; i++) {
       if (run.cancelled) break;
       const phase = phases[i];
@@ -508,12 +511,6 @@ async function runFeature(mode, userText) {
       send('llm:done', { more: i < phases.length - 1 });
     }
 
-    if (run.cancelled && !answers.length) return;
-    // One entry per run, not per phase: a two-phase design would otherwise eat
-    // two of the three history slots on its own.
-    // Recorded even for modes that don't read the history back (leetcode), so a
-    // follow-up asked through Assist can still pick up what Solve answered.
-    rememberAnswer(mode === 'ask' && userText ? userText : (def.userBubble || 'Assist with what is on screen and being said.'), answers.join('\n\n'));
   } catch (e) {
     // An abort throws here too, but that was deliberate — not something to
     // record as a failure or show the user as an error.
@@ -521,6 +518,14 @@ async function runFeature(mode, userText) {
     recordEvent({ level: 'error', event: 'llm_failed', msg: e && e.message ? e.message : String(e), frame: 'runFeature', context: { mode, provider: store.getSettings().provider } });
     send('llm:error', { message: e && e.message ? e.message : String(e) });
   } finally {
+    // Every entry here is a phase that ran to completion, so this is safe on
+    // the error and cancel paths too. One entry per run, not per phase: a
+    // two-phase design would otherwise eat two of the three history slots.
+    // Recorded even for modes that don't read the history back (leetcode), so a
+    // follow-up asked through Assist can still pick up what Solve answered.
+    if (answers.length) {
+      rememberAnswer(mode === 'ask' && userText ? userText : (def.userBubble || 'Assist with what is on screen and being said.'), answers.join('\n\n'));
+    }
     if (activeRun === run) { activeRun = null; state.busy = false; }
     settle();
   }
